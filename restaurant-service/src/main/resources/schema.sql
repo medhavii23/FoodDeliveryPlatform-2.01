@@ -1,0 +1,2 @@
+-- Schemas and tables are managed by Flyway migrations in h2-server.
+-- Do not run DDL here; use ddl-auto: validate.

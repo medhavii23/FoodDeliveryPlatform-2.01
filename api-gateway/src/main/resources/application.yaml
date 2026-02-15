@@ -1,0 +1,82 @@
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: API-GATEWAY
+
+  cloud:
+    gateway:
+      routes:
+
+
+        - id: IDENTITY-SERVICE
+          uri: lb://IDENTITY-SERVICE
+          predicates:
+            - Path=/auth/**
+
+        - id: RESTAURANT-SERVICE
+          uri: lb://RESTAURANT-SERVICE
+          predicates:
+            - Path=/api/restaurants/**
+          filters:
+            - AuthenticationFilter
+
+
+        - id: ORDER-SERVICE
+          uri: lb://ORDER-SERVICE
+          predicates:
+            - Path=/api/orders/** , /api/customers/** , /api/cart/**
+          filters:
+            - AuthenticationFilter
+
+
+        - id: DELIVERY-SERVICE
+          uri: lb://DELIVERY-SERVICE
+          predicates:
+            - Path=/api/delivery/**
+          filters:
+            - AuthenticationFilter
+
+
+        - id: RESTAURANT-DOCS
+          uri: lb://RESTAURANT-SERVICE
+          predicates:
+            - Path=/restaurants/v3/api-docs
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: ORDER-DOCS
+          uri: lb://ORDER-SERVICE
+          predicates:
+            - Path=/orders/v3/api-docs
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: DELIVERY-DOCS
+          uri: lb://DELIVERY-SERVICE
+          predicates:
+            - Path=/delivery/v3/api-docs
+          filters:
+            - SetPath=/v3/api-docs
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    urls:
+      - name: Order Service
+        url: /orders/v3/api-docs
+      - name: Restaurant Service
+        url: /restaurants/v3/api-docs
+      - name: Delivery Service
+        url: /delivery/v3/api-docs
