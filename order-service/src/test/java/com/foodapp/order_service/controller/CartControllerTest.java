@@ -50,6 +50,7 @@ class CartControllerTest {
         request.setRestaurantName("Rest 1");
         request.setItemName("Item 1");
         request.setQty(1);
+        request.setDeliveryArea("Area 1"); // Required field
 
         AddToCartResponse response = new AddToCartResponse(UUID.randomUUID(), UUID.randomUUID(), "User", "Rest 1",
                 "Area 1", CartStatus.ACTIVE, null, null, null, BigDecimal.TEN, BigDecimal.TEN);

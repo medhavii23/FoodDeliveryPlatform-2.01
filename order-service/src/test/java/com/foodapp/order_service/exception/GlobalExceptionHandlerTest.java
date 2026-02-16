@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -50,8 +51,8 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void handleInsufficientStock() {
-        InsufficientStockException ex = new InsufficientStockException("No stock",
-                Collections.singletonMap("item1", "OutOfStock"));
+        StockFailure failure = new StockFailure(1L, "Item1", 10, 5);
+        InsufficientStockException ex = new InsufficientStockException("No stock", List.of(failure));
         ResponseEntity<ApiError> response = exceptionHandler.handleInsufficientStock(ex, req);
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
         assertEquals("No stock", response.getBody().getMessage());
@@ -59,7 +60,8 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void handleOrderNotFound() {
-        OrderNotFoundException ex = new OrderNotFoundException("Order missing");
+        UUID orderId = UUID.randomUUID();
+        OrderNotFoundException ex = new OrderNotFoundException(orderId);
         ResponseEntity<ApiError> response = exceptionHandler.handleOrderNotFound(ex, req);
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }

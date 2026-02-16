@@ -79,7 +79,7 @@ class CartServiceTest {
 
         cartService.addOrUpdateItem(customerId, "User", request);
 
-        verify(cartRepository).save(any(Cart.class));
+        verify(cartRepository, times(2)).save(any(Cart.class)); // Called in newCart() and addOrUpdateItem()
         verify(cartItemRepository).save(any(CartItem.class));
     }
 

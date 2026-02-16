@@ -1,0 +1,100 @@
+﻿2026-02-16T23:16:29.045+05:30  INFO 26716 --- [           main] c.f.o.OrderServiceApplicationTests       : Started OrderServiceApplicationTests in 7.787 seconds (process running for 16.867)
+2026-02-16T23:16:29.047+05:30  WARN 26716 --- [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /v3/api-docs endpoint is enabled by default. To disable it in production, set the property 'springdoc.api-docs.enabled=false'
+2026-02-16T23:16:29.047+05:30  WARN 26716 --- [           main] o.s.core.events.SpringDocAppInitializer  : SpringDoc /swagger-ui.html endpoint is enabled by default. To disable it in production, set the property 'springdoc.swagger-ui.enabled=false'
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 7.838 s -- in com.foodapp.order_service.OrderServiceApplicationTests
+[INFO] Running com.foodapp.order_service.service.CartServiceTest
+2026-02-16T23:16:29.427+05:30  INFO 26716 --- [           main] c.f.order_service.service.CartService    : Checkout started for customer: 86fb3f71-361e-428d-8828-5b938d85c8bd restaurantFilter: null
+2026-02-16T23:16:29.430+05:30  WARN 26716 --- [           main] c.f.order_service.service.CartService    : Checkout failed: empty cart for customer: 86fb3f71-361e-428d-8828-5b938d85c8bd
+2026-02-16T23:16:29.458+05:30  INFO 26716 --- [           main] c.f.order_service.service.CartService    : Checkout started for customer: 8d13e0a3-663f-4d77-b9f7-7ac4a851855d restaurantFilter: null
+2026-02-16T23:16:29.460+05:30  INFO 26716 --- [           main] c.f.order_service.service.CartService    : Checkout completed for customer: 8d13e0a3-663f-4d77-b9f7-7ac4a851855d order: 2d8f2e97-9834-4005-b38c-fa1a26d22d71
+2026-02-16T23:16:29.471+05:30  INFO 26716 --- [           main] c.f.order_service.service.CartService    : Cart item updated for customer: 1ea65c92-5253-4cb7-8b9d-9880dfed0cec cart: 0d9940ec-d72c-4eed-83a1-3575419e18b3
+[ERROR] Tests run: 4, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.421 s <<< FAILURE! -- in com.foodapp.order_service.service.CartServiceTest
+[ERROR] com.foodapp.order_service.service.CartServiceTest.testAddOrUpdateItem_NewCart -- Time elapsed: 0.034 s <<< FAILURE!
+org.mockito.exceptions.verification.TooManyActualInvocations: 
+
+cartRepository.save(
+    <any com.foodapp.order_service.model.Cart>
+);
+Wanted 1 time:
+-> at com.foodapp.order_service.service.CartServiceTest.testAddOrUpdateItem_NewCart(CartServiceTest.java:82)
+But was 2 times:
+-> at com.foodapp.order_service.service.CartService.newCart(CartService.java:290)
+-> at com.foodapp.order_service.service.CartService.addOrUpdateItem(CartService.java:113)
+
+
+	at com.foodapp.order_service.service.CartServiceTest.testAddOrUpdateItem_NewCart(CartServiceTest.java:82)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1597)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1597)
+
+[INFO] Running com.foodapp.order_service.service.CustomerServiceTest
+2026-02-16T23:16:29.597+05:30  INFO 26716 --- [           main] c.f.o.service.CustomerService            : Creating new customer: a4bf38b6-0c70-4404-a8c4-e7d6275193d0
+2026-02-16T23:16:29.601+05:30  WARN 26716 --- [           main] c.f.o.service.CustomerService            : Customer not found for verification: 9661b9a3-ece0-4c2f-ae88-3ad96982378a
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.103 s -- in com.foodapp.order_service.service.CustomerServiceTest
+[INFO] Running com.foodapp.order_service.service.OrderServiceTest
+2026-02-16T23:16:29.726+05:30  INFO 26716 --- [           main] c.f.order_service.service.OrderService   : Updating order status: f13072ed-fc7f-4dd0-b18a-14425a26fbe3 to PREPARING
+2026-02-16T23:16:29.729+05:30  INFO 26716 --- [           main] c.f.order_service.service.OrderService   : Order status updated successfully: f13072ed-fc7f-4dd0-b18a-14425a26fbe3 -> PREPARING
+2026-02-16T23:16:29.740+05:30  INFO 26716 --- [           main] c.f.order_service.service.OrderService   : Processing order for customer: null at restaurant: Rest 1
+2026-02-16T23:16:29.740+05:30  WARN 26716 --- [           main] c.f.order_service.service.OrderService   : Inventory reservation failed for restaurant: Rest 1
+2026-02-16T23:16:29.746+05:30  INFO 26716 --- [           main] c.f.order_service.service.OrderService   : Processing order for customer: null at restaurant: Rest 1
+2026-02-16T23:16:29.747+05:30  INFO 26716 --- [           main] c.f.order_service.service.OrderService   : Delivery partner assigned: Partner A for order: 73f754b9-c726-472f-a5b8-cb23f67c8df5
+2026-02-16T23:16:29.747+05:30  INFO 26716 --- [           main] c.f.order_service.service.OrderService   : Order placed successfully: 73f754b9-c726-472f-a5b8-cb23f67c8df5 with total: 11.00
+2026-02-16T23:16:29.755+05:30  INFO 26716 --- [           main] c.f.order_service.service.OrderService   : Syncing order: 598221b5-96a5-49ba-b1bf-cf517647cbcc
+[ERROR] Tests run: 5, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.154 s <<< FAILURE! -- in com.foodapp.order_service.service.OrderServiceTest
+[ERROR] com.foodapp.order_service.service.OrderServiceTest.testSyncOrder -- Time elapsed: 0.006 s <<< ERROR!
+org.mockito.exceptions.misusing.UnnecessaryStubbingException: 
+
+Unnecessary stubbings detected.
+Clean & maintainable test code requires zero unnecessary code.
+Following stubbings are unnecessary (click to navigate to relevant line of code):
+  1. -> at com.foodapp.order_service.service.OrderServiceTest.testSyncOrder(OrderServiceTest.java:120)
+Please remove unnecessary stubbings or use 'lenient' strictness. More info: javadoc for UnnecessaryStubbingException class.
+	at org.mockito.junit.jupiter.MockitoExtension.lambda$afterEach$2(MockitoExtension.java:200)
+	at java.base/java.util.Optional.ifPresent(Optional.java:178)
+	at org.mockito.junit.jupiter.MockitoExtension.afterEach(MockitoExtension.java:198)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1597)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1597)
+
+[INFO] 
+[INFO] Results:
+[INFO] 
+[ERROR] Failures: 
+[ERROR]   CartControllerTest.testAddOrUpdateItem:64 Status expected:<201> but was:<400>
+[ERROR]   CartServiceTest.testAddOrUpdateItem_NewCart:82 
+cartRepository.save(
+    <any com.foodapp.order_service.model.Cart>
+);
+Wanted 1 time:
+-> at com.foodapp.order_service.service.CartServiceTest.testAddOrUpdateItem_NewCart(CartServiceTest.java:82)
+But was 2 times:
+-> at com.foodapp.order_service.service.CartService.newCart(CartService.java:290)
+-> at com.foodapp.order_service.service.CartService.addOrUpdateItem(CartService.java:113)
+
+
+[ERROR] Errors: 
+[ERROR]   OrderServiceTest.testSyncOrder ╗ UnnecessaryStubbing 
+Unnecessary stubbings detected.
+Clean & maintainable test code requires zero unnecessary code.
+Following stubbings are unnecessary (click to navigate to relevant line of code):
+  1. -> at com.foodapp.order_service.service.OrderServiceTest.testSyncOrder(OrderServiceTest.java:120)
+Please remove unnecessary stubbings or use 'lenient' strictness. More info: javadoc for UnnecessaryStubbingException class.
+[INFO] 
+[ERROR] Tests run: 38, Failures: 2, Errors: 1, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  20.753 s
+[INFO] Finished at: 2026-02-16T23:16:30+05:30
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.4:test (default-test) on project order-service: There are test failures.
+[ERROR] 
+[ERROR] See C:\Users\91917\OneDrive\Desktop\FoodDeliveryPlatform-2.01\order-service\target\surefire-reports for the individual test results.
+[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

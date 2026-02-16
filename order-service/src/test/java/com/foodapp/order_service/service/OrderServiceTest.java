@@ -100,9 +100,9 @@ class OrderServiceTest {
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenReturn(order);
 
-        Order updated = orderService.updateOrderStatus(orderId, OrderStatus.PREPARED);
+        Order updated = orderService.updateOrderStatus(orderId, OrderStatus.PREPARING);
 
-        assertEquals(OrderStatus.PREPARED, updated.getStatus());
+        assertEquals(OrderStatus.PREPARING, updated.getStatus());
     }
 
     @Test
@@ -117,7 +117,8 @@ class OrderServiceTest {
         syncReq.setPartnerName("Partner X"); // Should trigger PLACED
 
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        when(orderRepository.save(any(Order.class))).thenReturn(order);
+        // Removed unnecessary stubbing:
+        // when(orderRepository.save(any(Order.class))).thenReturn(order);
 
         Order result = orderService.syncOrder(syncReq);
 

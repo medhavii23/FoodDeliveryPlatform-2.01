@@ -38,39 +38,46 @@ class OrderModelsTest {
     @Test
     void testCart() {
         Cart cart = new Cart();
-        cart.setCartId("cart1");
-        cart.setRestaurantId(10L);
-        cart.setTotalPrice(BigDecimal.valueOf(100));
+        UUID cartId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
 
-        assertEquals("cart1", cart.getCartId());
+        cart.setCartId(cartId);
+        cart.setCustomerId(customerId);
+        cart.setRestaurantId(10L);
+        cart.setDeliveryArea("North");
+        cart.setStatus(CartStatus.ACTIVE);
+
+        assertEquals(cartId, cart.getCartId());
+        assertEquals(customerId, cart.getCustomerId());
         assertEquals(10L, cart.getRestaurantId());
-        assertEquals(BigDecimal.valueOf(100), cart.getTotalPrice());
+        assertEquals("North", cart.getDeliveryArea());
+        assertEquals(CartStatus.ACTIVE, cart.getStatus());
     }
 
     @Test
     void testCartItem() {
         CartItem item = new CartItem();
-        item.setItemId(1L);
-        item.setName("Burger");
-        item.setPrice(BigDecimal.valueOf(10));
-        item.setQuantity(2);
+        item.setItemName("Burger");
+        item.setQty(2);
 
-        assertEquals(1L, item.getItemId());
-        assertEquals("Burger", item.getName());
-        assertEquals(BigDecimal.valueOf(10), item.getPrice());
-        assertEquals(2, item.getQuantity());
+        assertEquals("Burger", item.getItemName());
+        assertEquals(2, item.getQty());
     }
 
     @Test
     void testCustomer() {
         Customer c = new Customer();
         UUID id = UUID.randomUUID();
-        c.setId(id);
-        c.setName("John");
-        c.setEmail("john@example.com");
+        c.setCustomerId(id);
 
-        assertEquals(id, c.getId());
-        assertEquals("John", c.getName());
-        assertEquals("john@example.com", c.getEmail());
+        assertEquals(id, c.getCustomerId());
+    }
+
+    @Test
+    void testOrderStatus() {
+        assertEquals(OrderStatus.PLACED, OrderStatus.valueOf("PLACED"));
+        assertEquals(OrderStatus.PREPARING, OrderStatus.valueOf("PREPARING"));
+        assertEquals(OrderStatus.OUT_FOR_DELIVERY, OrderStatus.valueOf("OUT_FOR_DELIVERY"));
+        assertEquals(OrderStatus.DELIVERED, OrderStatus.valueOf("DELIVERED"));
     }
 }
