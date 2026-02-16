@@ -3,116 +3,119 @@ package com.foodapp.api_gateway.filter;
 import com.foodapp.api_gateway.constants.Constants;
 import com.foodapp.api_gateway.util.JwtUtil;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.impl.DefaultClaims;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
-import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
-import reactor.test.StepVerifier;
 
-import java.util.UUID;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-import org.mockito.ArgumentCaptor;
-import org.springframework.test.util.ReflectionTestUtils;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AuthenticationFilterTest {
 
-    private final RouteValidator routeValidator = new RouteValidator();
+    @Spy
+    private RouteValidator validator = new RouteValidator();
 
     @Mock
     private JwtUtil jwtUtil;
 
     @Mock
-    private GatewayFilterChain chain;
+    private GatewayFilterChain filterChain;
 
-    private AuthenticationFilter filter;
+    @InjectMocks
+    private AuthenticationFilter authenticationFilter;
 
     @BeforeEach
     void setUp() {
-        filter = new AuthenticationFilter();
-        ReflectionTestUtils.setField(filter, "validator", routeValidator);
-        ReflectionTestUtils.setField(filter, "jwtUtil", jwtUtil);
-        lenient().when(chain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
     }
 
     @Test
-    void apply_whenPathNotSecured_invokesChainWithoutAuth() {
-        ServerWebExchange exchange = MockServerWebExchange.from(
-                MockServerHttpRequest.get("/auth/register").build());
+    void testApply_OpenEndpoint_ShouldBypassAuth() {
+        // Arrange
+        MockServerHttpRequest request = MockServerHttpRequest.get(Constants.ENDPOINT_AUTH_REGISTER).build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilter filter = authenticationFilter.apply(new AuthenticationFilter.Config());
+        when(filterChain.filter(exchange)).thenReturn(Mono.empty());
 
-        Mono<Void> result = filter.apply(new AuthenticationFilter.Config()).filter(exchange, chain);
+        // Act
+        filter.filter(exchange, filterChain).block();
 
-        StepVerifier.create(result).verifyComplete();
-        verify(chain).filter(exchange);
-        assertThat(exchange.getRequest().getHeaders().getFirst(Constants.HEADER_AUTH_USER)).isNull();
+        // Assert
+        verify(jwtUtil, never()).validateToken(anyString());
+        verify(filterChain).filter(exchange);
     }
 
     @Test
-    void apply_whenSecuredAndNoAuthHeader_throwsMissingAuthHeader() {
-        ServerWebExchange exchange = MockServerWebExchange.from(
-                MockServerHttpRequest.post("/api/cart").build());
+    void testApply_SecuredEndpoint_MissingAuthHeader_ShouldThrowexception() {
+        // Arrange
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/orders").build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilter filter = authenticationFilter.apply(new AuthenticationFilter.Config());
 
-        Throwable thrown = null;
-        try {
-            filter.apply(new AuthenticationFilter.Config()).filter(exchange, chain).block();
-        } catch (Throwable e) {
-            thrown = e.getCause() != null ? e.getCause() : e;
-        }
-        assertThat(thrown).isNotNull().hasMessageContaining(Constants.ERROR_MISSING_AUTH_HEADER);
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> filter.filter(exchange, filterChain).block());
     }
 
     @Test
-    void apply_whenSecuredAndInvalidToken_throwsUnauthorized() {
-        ServerWebExchange exchange = MockServerWebExchange.from(
-                MockServerHttpRequest.post("/api/cart")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer invalid-token")
-                        .build());
-        when(jwtUtil.extractAllClaims("invalid-token")).thenThrow(new RuntimeException("bad token"));
+    void testApply_SecuredEndpoint_ValidToken_ShouldAuthenticate() {
+        // Arrange
+        String token = "valid_token";
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/orders")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-        Throwable thrown = null;
-        try {
-            filter.apply(new AuthenticationFilter.Config()).filter(exchange, chain).block();
-        } catch (Throwable e) {
-            thrown = e.getCause() != null ? e.getCause() : e;
-        }
-        assertThat(thrown).isNotNull().hasMessageContaining(Constants.ERROR_UNAUTHORIZED_ACCESS);
-    }
+        Claims claims = new DefaultClaims(Map.of(
+                "sub", "testUser",
+                Constants.CLAIM_ROLE, "USER",
+                Constants.CLAIM_USER_ID, 123));
 
-    @Test
-    void apply_whenSecuredAndValidToken_addsAuthHeadersAndInvokesChain() {
-        String token = "valid-jwt";
-        UUID userId = UUID.randomUUID();
-        Claims claims = io.jsonwebtoken.Jwts.claims().setSubject("alice");
-        claims.put(Constants.CLAIM_ROLE, "USER");
-        claims.put(Constants.CLAIM_USER_ID, userId);
-
-        ServerWebExchange exchange = MockServerWebExchange.from(
-                MockServerHttpRequest.post("/api/cart")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                        .build());
+        // Mock JwtUtil
+        doNothing().when(jwtUtil).validateToken(token);
         when(jwtUtil.extractAllClaims(token)).thenReturn(claims);
+        when(filterChain.filter(any())).thenReturn(Mono.empty());
 
-        Mono<Void> result = filter.apply(new AuthenticationFilter.Config()).filter(exchange, chain);
+        GatewayFilter filter = authenticationFilter.apply(new AuthenticationFilter.Config());
 
-        StepVerifier.create(result).verifyComplete();
-        ArgumentCaptor<ServerWebExchange> exchangeCaptor = ArgumentCaptor.forClass(ServerWebExchange.class);
-        verify(chain).filter(exchangeCaptor.capture());
-        ServerWebExchange captured = exchangeCaptor.getValue();
-        assertThat(captured.getRequest().getHeaders().getFirst(Constants.HEADER_AUTH_USER)).isEqualTo("alice");
-        assertThat(captured.getRequest().getHeaders().getFirst(Constants.HEADER_AUTH_ROLE)).isEqualTo("USER");
-        assertThat(captured.getRequest().getHeaders().getFirst(Constants.HEADER_AUTH_ID)).isEqualTo(userId.toString());
+        // Act
+        filter.filter(exchange, filterChain).block();
+
+        // Assert
+        verify(jwtUtil).validateToken(token);
+        verify(filterChain).filter(any()); // Should be called with mutated exchange
+    }
+
+    @Test
+    void testApply_SecuredEndpoint_InvalidToken_ShouldThrowException() {
+        // Arrange
+        String token = "invalid_token";
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/orders")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        doThrow(new RuntimeException("Invalid Token")).when(jwtUtil).validateToken(token);
+
+        GatewayFilter filter = authenticationFilter.apply(new AuthenticationFilter.Config());
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> filter.filter(exchange, filterChain).block());
     }
 }

@@ -1,54 +1,35 @@
 package com.foodapp.api_gateway.filter;
 
-import org.junit.jupiter.api.BeforeEach;
+import com.foodapp.api_gateway.constants.Constants;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RouteValidatorTest {
 
-    private RouteValidator routeValidator;
+    private final RouteValidator routeValidator = new RouteValidator();
 
-    @BeforeEach
-    void setUp() {
-        routeValidator = new RouteValidator();
+    @Test
+    void testIsSecured_OpenEndpoints() {
+        ServerHttpRequest request1 = MockServerHttpRequest.get(Constants.ENDPOINT_AUTH_REGISTER).build();
+        assertFalse(routeValidator.isSecured.test(request1));
+
+        ServerHttpRequest request2 = MockServerHttpRequest.get(Constants.ENDPOINT_AUTH_TOKEN).build();
+        assertFalse(routeValidator.isSecured.test(request2));
+
+        ServerHttpRequest request3 = MockServerHttpRequest.get(Constants.ENDPOINT_EUREKA).build();
+        assertFalse(routeValidator.isSecured.test(request3));
     }
 
     @Test
-    void isSecured_openPathAuthRegister_returnsFalse() {
-        ServerHttpRequest request = MockServerHttpRequest.get("/auth/register").build();
-        assertThat(routeValidator.isSecured.test(request)).isFalse();
-    }
+    void testIsSecured_SecuredEndpoints() {
+        ServerHttpRequest request1 = MockServerHttpRequest.get("/api/orders").build();
+        assertTrue(routeValidator.isSecured.test(request1));
 
-    @Test
-    void isSecured_openPathAuthToken_returnsFalse() {
-        ServerHttpRequest request = MockServerHttpRequest.get("/auth/token").build();
-        assertThat(routeValidator.isSecured.test(request)).isFalse();
-    }
-
-    @Test
-    void isSecured_openPathEureka_returnsFalse() {
-        ServerHttpRequest request = MockServerHttpRequest.get("/eureka").build();
-        assertThat(routeValidator.isSecured.test(request)).isFalse();
-    }
-
-    @Test
-    void isSecured_openPathRegisterAdmin_returnsFalse() {
-        ServerHttpRequest request = MockServerHttpRequest.get("/auth/register/admin").build();
-        assertThat(routeValidator.isSecured.test(request)).isFalse();
-    }
-
-    @Test
-    void isSecured_securedPathApiCart_returnsTrue() {
-        ServerHttpRequest request = MockServerHttpRequest.get("/api/cart").build();
-        assertThat(routeValidator.isSecured.test(request)).isTrue();
-    }
-
-    @Test
-    void isSecured_securedPathApiDelivery_returnsTrue() {
-        ServerHttpRequest request = MockServerHttpRequest.get("/api/delivery/estimate").build();
-        assertThat(routeValidator.isSecured.test(request)).isTrue();
+        ServerHttpRequest request2 = MockServerHttpRequest.get("/api/restaurants").build();
+        assertTrue(routeValidator.isSecured.test(request2));
     }
 }

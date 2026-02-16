@@ -1,5 +1,6 @@
 package com.foodapp.order_service.service;
 
+import com.foodapp.order_service.constants.ErrorMessages;
 import com.foodapp.order_service.exception.CustomerNotFoundException;
 import com.foodapp.order_service.exception.InvalidCustomerCredentialsException;
 import com.foodapp.order_service.model.Customer;
@@ -13,11 +14,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class CustomerServiceTest {
@@ -29,52 +28,51 @@ class CustomerServiceTest {
     private CustomerService customerService;
 
     @Test
-    void ensureCustomerExists_whenExists_returnsCustomer() {
-        UUID id = UUID.randomUUID();
-        Customer c = new Customer(id);
-        when(customerRepository.findById(id)).thenReturn(Optional.of(c));
+    void testEnsureCustomerExists_Existing() {
+        UUID customerId = UUID.randomUUID();
+        Customer customer = new Customer(customerId);
+        when(customerRepository.findById(customerId)).thenReturn(Optional.of(customer));
 
-        Customer result = customerService.ensureCustomerExists(id, "Alice");
+        Customer result = customerService.ensureCustomerExists(customerId, "Test Name");
 
-        assertThat(result.getCustomerId()).isEqualTo(id);
-        verify(customerRepository).findById(id);
+        assertEquals(customer, result);
+        verify(customerRepository, never()).save(any());
     }
 
     @Test
-    void ensureCustomerExists_whenNotExists_createsAndSaves() {
-        UUID id = UUID.randomUUID();
-        when(customerRepository.findById(id)).thenReturn(Optional.empty());
-        when(customerRepository.save(any(Customer.class))).thenAnswer(i -> i.getArgument(0));
+    void testEnsureCustomerExists_New() {
+        UUID customerId = UUID.randomUUID();
+        when(customerRepository.findById(customerId)).thenReturn(Optional.empty());
+        when(customerRepository.save(any(Customer.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Customer result = customerService.ensureCustomerExists(id, "Bob");
+        Customer result = customerService.ensureCustomerExists(customerId, "Test Name");
 
-        assertThat(result.getCustomerId()).isEqualTo(id);
+        assertNotNull(result);
+        assertEquals(customerId, result.getCustomerId());
         verify(customerRepository).save(any(Customer.class));
     }
 
     @Test
-    void verifyOrThrow_whenNullCustomerId_throws() {
-        assertThatThrownBy(() -> customerService.verifyOrThrow(null, "x"))
-                .isInstanceOf(InvalidCustomerCredentialsException.class);
+    void testVerifyOrThrow_Success() {
+        UUID customerId = UUID.randomUUID();
+        Customer customer = new Customer(customerId);
+        when(customerRepository.findById(customerId)).thenReturn(Optional.of(customer));
+
+        Customer result = customerService.verifyOrThrow(customerId, "Test Name");
+
+        assertEquals(customer, result);
     }
 
     @Test
-    void verifyOrThrow_whenNotFound_throws() {
-        UUID id = UUID.randomUUID();
-        when(customerRepository.findById(id)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> customerService.verifyOrThrow(id, "x"))
-                .isInstanceOf(CustomerNotFoundException.class);
+    void testVerifyOrThrow_NullId() {
+        assertThrows(InvalidCustomerCredentialsException.class, () -> customerService.verifyOrThrow(null, "Test Name"));
     }
 
     @Test
-    void verifyOrThrow_whenFound_returnsCustomer() {
-        UUID id = UUID.randomUUID();
-        Customer c = new Customer(id);
-        when(customerRepository.findById(id)).thenReturn(Optional.of(c));
+    void testVerifyOrThrow_NotFound() {
+        UUID customerId = UUID.randomUUID();
+        when(customerRepository.findById(customerId)).thenReturn(Optional.empty());
 
-        Customer result = customerService.verifyOrThrow(id, "Alice");
-
-        assertThat(result.getCustomerId()).isEqualTo(id);
+        assertThrows(CustomerNotFoundException.class, () -> customerService.verifyOrThrow(customerId, "Test Name"));
     }
 }

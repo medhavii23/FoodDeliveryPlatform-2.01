@@ -31,25 +31,28 @@ import java.util.UUID;
  * Core business service responsible for complete order lifecycle management
  * in the food delivery platform.
  *
- * <p>This service orchestrates communication between:
+ * <p>
+ * This service orchestrates communication between:
  * <ul>
- *   <li>Restaurant Service (inventory reservation & pricing)</li>
- *   <li>Delivery Service (partner assignment, ETA, delivery charge)</li>
- *   <li>Customer validation layer</li>
+ * <li>Restaurant Service (inventory reservation & pricing)</li>
+ * <li>Delivery Service (partner assignment, ETA, delivery charge)</li>
+ * <li>Customer validation layer</li>
  * </ul>
  *
- * <p>Main responsibilities:
+ * <p>
+ * Main responsibilities:
  * <ul>
- *   <li>Placing new orders</li>
- *   <li>Handling stock validation & rollback</li>
- *   <li>Assigning delivery partners</li>
- *   <li>Persisting orders and order items</li>
- *   <li>Syncing delivery updates</li>
- *   <li>Admin order status updates</li>
- *   <li>Fetching customer-specific orders</li>
+ * <li>Placing new orders</li>
+ * <li>Handling stock validation & rollback</li>
+ * <li>Assigning delivery partners</li>
+ * <li>Persisting orders and order items</li>
+ * <li>Syncing delivery updates</li>
+ * <li>Admin order status updates</li>
+ * <li>Fetching customer-specific orders</li>
  * </ul>
  *
- * <p>All financial values use {@link BigDecimal} with centralized scaling
+ * <p>
+ * All financial values use {@link BigDecimal} with centralized scaling
  * and rounding configuration defined in {@link Constants}.
  */
 @Service
@@ -75,23 +78,26 @@ public class OrderService {
     /**
      * Places a new order following the complete business workflow.
      *
-     * <p>Execution Flow:
+     * <p>
+     * Execution Flow:
      * <ol>
-     *   <li>Validate that customer exists</li>
-     *   <li>Reserve inventory from Restaurant Service</li>
-     *   <li>Assign delivery partner via Delivery Service</li>
-     *   <li>Persist order and order items</li>
-     *   <li>Rollback inventory if any failure occurs</li>
+     * <li>Validate that customer exists</li>
+     * <li>Reserve inventory from Restaurant Service</li>
+     * <li>Assign delivery partner via Delivery Service</li>
+     * <li>Persist order and order items</li>
+     * <li>Rollback inventory if any failure occurs</li>
      * </ol>
      *
-     * <p>This method runs inside a transaction. If any step fails after
+     * <p>
+     * This method runs inside a transaction. If any step fails after
      * inventory reservation, a rollback attempt is made to release stock.
      *
      * @param request order placement request containing customer, restaurant,
      *                items, and delivery area details
      * @return saved {@link Order} entity
      * @throws InsufficientStockException if inventory validation fails
-     * @throws OrderProcessingException if downstream service fails after reservation
+     * @throws OrderProcessingException   if downstream service fails after
+     *                                    reservation
      */
     @Transactional
     public Order placeOrder(PlaceOrderRequest request) throws InsufficientStockException {
@@ -127,21 +133,22 @@ public class OrderService {
     }
 
     /**
-     * Reserves menu items in the Restaurant Service and validates stock availability.
+     * Reserves menu items in the Restaurant Service and validates stock
+     * availability.
      *
-     * <p>If reservation fails:
+     * <p>
+     * If reservation fails:
      * <ul>
-     *   <li>Builds structured stock failure list</li>
-     *   <li>Distinguishes between item-not-found and insufficient stock</li>
-     *   <li>Throws {@link InsufficientStockException}</li>
+     * <li>Builds structured stock failure list</li>
+     * <li>Distinguishes between item-not-found and insufficient stock</li>
+     * <li>Throws {@link InsufficientStockException}</li>
      * </ul>
      *
      * @param request order placement request
      * @return successful {@link MenuReserveResponse}
      * @throws InsufficientStockException if reservation unsuccessful
      */
-    private MenuReserveResponse reserveRestaurantInventory(PlaceOrderRequest request)
-    {
+    private MenuReserveResponse reserveRestaurantInventory(PlaceOrderRequest request) {
         log.debug("Reserving inventory for restaurant: {}", request.getRestaurantName());
 
         MenuReserveRequest reserveReq = new MenuReserveRequest();
@@ -181,25 +188,26 @@ public class OrderService {
     /**
      * Assigns a delivery partner via Delivery Service.
      *
-     * <p>This single Feign call handles:
+     * <p>
+     * This single Feign call handles:
      * <ul>
-     *   <li>Partner assignment</li>
-     *   <li>Delivery charge calculation</li>
-     *   <li>ETA estimation</li>
+     * <li>Partner assignment</li>
+     * <li>Delivery charge calculation</li>
+     * <li>ETA estimation</li>
      * </ul>
      *
-     * <p>If delivery service fails, a fallback response is generated
+     * <p>
+     * If delivery service fails, a fallback response is generated
      * to allow order creation without blocking.
      *
-     * @param orderId generated order ID
+     * @param orderId            generated order ID
      * @param restaurantLocation source location
-     * @param deliveryArea destination location
+     * @param deliveryArea       destination location
      * @return {@link DeliveryResponse} (real or fallback)
      */
     private DeliveryResponse assignDeliveryPartner(UUID orderId,
-                                                   String restaurantLocation,
-                                                   String deliveryArea)
-    {
+            String restaurantLocation,
+            String deliveryArea) {
         log.debug("Assigning delivery partner for order: {} from {} to {}",
                 orderId, restaurantLocation, deliveryArea);
 
@@ -213,11 +221,16 @@ public class OrderService {
             DeliveryResponse deliveryResp = deliveryClient.assignDelivery(orderId, deliveryReq);
 
             if (deliveryResp != null && deliveryResp.isSuccess()) {
-                log.info("Delivery partner assigned: {} for order: {}",
-                        deliveryResp.getPartnerName(), orderId);
+                if (deliveryResp.getPartnerName() != null) {
+                    log.info("Delivery partner assigned: {} for order: {}",
+                            deliveryResp.getPartnerName(), orderId);
+                } else {
+                    log.info("Delivery assignment pending (10% fail case) for order: {}. Charge calculated: {}",
+                            orderId, deliveryResp.getDeliveryCharge());
+                }
                 return deliveryResp;
             } else {
-                log.warn("Delivery service could not assign partner for order: {}. Using fallback.", orderId);
+                log.warn("Delivery service marked request as failed for order: {}. Using fallback.", orderId);
                 return createFallbackDeliveryResponse();
             }
 
@@ -231,18 +244,18 @@ public class OrderService {
      * Creates a fallback delivery response when Delivery Service
      * is unavailable or fails.
      *
-     * <p>Fallback values:
+     * <p>
+     * Fallback values:
      * <ul>
-     *   <li>Partner: SEARCHING_PARTNER</li>
-     *   <li>Delivery charge: 0</li>
-     *   <li>ETA: PENDING</li>
-     *   <li>Status: false</li>
+     * <li>Partner: SEARCHING_PARTNER</li>
+     * <li>Delivery charge: 0</li>
+     * <li>ETA: PENDING</li>
+     * <li>Status: false</li>
      * </ul>
      *
      * @return fallback {@link DeliveryResponse}
      */
-    private DeliveryResponse createFallbackDeliveryResponse()
-    {
+    private DeliveryResponse createFallbackDeliveryResponse() {
         return new DeliveryResponse(
                 Constants.SEARCHING_PARTNER,
                 BigDecimal.ZERO,
@@ -254,30 +267,31 @@ public class OrderService {
     /**
      * Persists Order and corresponding OrderItem records.
      *
-     * <p>Calculates:
+     * <p>
+     * Calculates:
      * <ul>
-     *   <li>Subtotal from restaurant</li>
-     *   <li>Delivery charge</li>
-     *   <li>Total amount</li>
+     * <li>Subtotal from restaurant</li>
+     * <li>Delivery charge</li>
+     * <li>Total amount</li>
      * </ul>
      *
-     * <p>Sets order status:
+     * <p>
+     * Sets order status:
      * <ul>
-     *   <li>PLACED if delivery partner assigned</li>
-     *   <li>PREPARING if partner pending</li>
+     * <li>PLACED if delivery partner assigned</li>
+     * <li>PREPARING if partner pending</li>
      * </ul>
      *
-     * @param orderId unique order ID
-     * @param request original request
-     * @param reserveResp reservation response
+     * @param orderId      unique order ID
+     * @param request      original request
+     * @param reserveResp  reservation response
      * @param deliveryResp delivery response
      * @return persisted {@link Order}
      */
     private Order saveOrderWithItems(UUID orderId,
-                                     PlaceOrderRequest request,
-                                     MenuReserveResponse reserveResp,
-                                     DeliveryResponse deliveryResp)
-    {
+            PlaceOrderRequest request,
+            MenuReserveResponse reserveResp,
+            DeliveryResponse deliveryResp) {
         log.debug("Saving order: {} with items", orderId);
 
         // Calculate totals
@@ -286,7 +300,8 @@ public class OrderService {
         BigDecimal total = subtotal.add(deliveryCharge)
                 .setScale(Constants.MONEY_SCALE, Constants.MONEY_ROUNDING);
 
-        // Create order entity (normalized: no customer/restaurant/delivery names; resolve via joins)
+        // Create order entity (normalized: no customer/restaurant/delivery names;
+        // resolve via joins)
         Order order = new Order();
         order.setOrderId(orderId);
         order.setCustomerId(request.getCustomerId());
@@ -323,15 +338,16 @@ public class OrderService {
     /**
      * Releases reserved inventory back to Restaurant Service.
      *
-     * <p>This is a best-effort rollback operation executed when order
+     * <p>
+     * This is a best-effort rollback operation executed when order
      * placement fails after stock reservation.
      *
-     * <p>Failure of this method does NOT rethrow exception.
+     * <p>
+     * Failure of this method does NOT rethrow exception.
      *
      * @param request original order request
      */
-    private void releaseInventory(PlaceOrderRequest request)
-    {
+    private void releaseInventory(PlaceOrderRequest request) {
         try {
             log.info("Releasing inventory for restaurant: {}", request.getRestaurantName());
             MenuReserveRequest releaseReq = new MenuReserveRequest();
@@ -354,8 +370,7 @@ public class OrderService {
      * @param reserveResp reservation response
      * @return list of stock failure details
      */
-    private List<StockFailure> buildStockFailures(MenuReserveResponse reserveResp)
-    {
+    private List<StockFailure> buildStockFailures(MenuReserveResponse reserveResp) {
         List<StockFailure> failures = new ArrayList<>();
 
         if (reserveResp.getUnavailableItems() != null) {
@@ -370,20 +385,21 @@ public class OrderService {
 
         return failures;
     }
+
     /**
      * Updates order status manually (Admin operation).
      *
-     * <p>This method should be secured at controller layer
+     * <p>
+     * This method should be secured at controller layer
      * to allow only ADMIN role access.
      *
-     * @param orderId target order ID
+     * @param orderId   target order ID
      * @param newStatus new {@link OrderStatus}
      * @return updated {@link Order}
      * @throws OrderNotFoundException if order not found
      */
     @Transactional
-    public Order updateOrderStatus(UUID orderId, OrderStatus newStatus)
- {
+    public Order updateOrderStatus(UUID orderId, OrderStatus newStatus) {
         log.info("Updating order status: {} to {}", orderId, newStatus);
 
         Order order = orderRepository.findById(orderId)
@@ -404,23 +420,24 @@ public class OrderService {
     /**
      * Synchronizes order details from Delivery Service callback.
      *
-     * <p>Supports partial updates:
+     * <p>
+     * Supports partial updates:
      * <ul>
-     *   <li>Delivery partner</li>
-     *   <li>ETA</li>
-     *   <li>Delivery charge (recalculates total)</li>
-     *   <li>Status update</li>
+     * <li>Delivery partner</li>
+     * <li>ETA</li>
+     * <li>Delivery charge (recalculates total)</li>
+     * <li>Status update</li>
      * </ul>
      *
-     * <p>Automatically transitions PREPARING → PLACED
+     * <p>
+     * Automatically transitions PREPARING → PLACED
      * when partner gets assigned.
      *
      * @param syncReq delivery sync request
      * @return updated {@link Order}
      */
     @Transactional
-    public Order syncOrder(OrderSyncRequest syncReq)
-    {
+    public Order syncOrder(OrderSyncRequest syncReq) {
         log.info("Syncing order: {}", syncReq.getOrderId());
 
         Order order = orderRepository.findById(syncReq.getOrderId())
@@ -464,8 +481,7 @@ public class OrderService {
      * @param customerId customer UUID
      * @return list of orders
      */
-    public List<Order> getUserOrders(UUID customerId)
-    {
+    public List<Order> getUserOrders(UUID customerId) {
         log.debug("getUserOrders customerId: {}", customerId);
         return orderRepository.findByCustomerIdOrderByCreatedAtDesc(customerId);
     }
@@ -473,25 +489,27 @@ public class OrderService {
     /**
      * Fetches a single order for a specific customer.
      *
-     * <p>Prevents users from accessing others' orders.
+     * <p>
+     * Prevents users from accessing others' orders.
      *
-     * @param orderId order UUID
+     * @param orderId    order UUID
      * @param customerId customer UUID
      * @return matching order
      * @throws OrderNotFoundException if not found or not owned by user
      */
-    public Order getUserOrder(UUID orderId, UUID customerId)
-    {
+    public Order getUserOrder(UUID orderId, UUID customerId) {
         log.debug("getUserOrder orderId: {} customerId: {}", orderId, customerId);
         return orderRepository.findByOrderIdAndCustomerId(orderId, customerId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
     }
 
     /**
-     * Returns customer order summary with restaurant and delivery partner resolved via joins (normalized).
+     * Returns customer order summary with restaurant and delivery partner resolved
+     * via joins (normalized).
      *
      * @param customerId customer UUID
-     * @return list of order summary DTOs with restaurant name and delivery partner from joined tables
+     * @return list of order summary DTOs with restaurant name and delivery partner
+     *         from joined tables
      */
     public List<CustomerOrderSummaryDto> getCustomerOrderSummary(UUID customerId) {
         log.debug("getCustomerOrderSummary customerId: {}", customerId);
@@ -502,8 +520,10 @@ public class OrderService {
     /**
      * Maps a summary query row to {@link CustomerOrderSummaryDto}.
      *
-     * @param row raw row from repository (orderId, customerId, totalAmount, status, createdAt,
-     *            restaurantId, restaurantName, locationName, deliveryId, deliveryPartner, eta, deliveryStatus)
+     * @param row raw row from repository (orderId, customerId, totalAmount, status,
+     *            createdAt,
+     *            restaurantId, restaurantName, locationName, deliveryId,
+     *            deliveryPartner, eta, deliveryStatus)
      * @return populated DTO
      */
     private CustomerOrderSummaryDto mapRowToCustomerOrderSummary(Object[] row) {
@@ -534,13 +554,14 @@ public class OrderService {
     /**
      * Normalizes money values using configured scale and rounding.
      *
-     * <p>If null, defaults to {@link BigDecimal#ZERO}.
+     * <p>
+     * If null, defaults to {@link BigDecimal#ZERO}.
      *
      * @param value monetary value
      * @return normalized amount
      */
-    private BigDecimal normalizeMoney(BigDecimal value)
-    {
-        return Objects.requireNonNullElse(value, BigDecimal.ZERO).setScale(Constants.MONEY_SCALE, Constants.MONEY_ROUNDING);
+    private BigDecimal normalizeMoney(BigDecimal value) {
+        return Objects.requireNonNullElse(value, BigDecimal.ZERO).setScale(Constants.MONEY_SCALE,
+                Constants.MONEY_ROUNDING);
     }
 }

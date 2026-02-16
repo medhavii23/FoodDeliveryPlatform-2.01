@@ -19,7 +19,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Service for delivery estimation, partner assignment, tracking, and status updates.
+ * Service for delivery estimation, partner assignment, tracking, and status
+ * updates.
  * Syncs assignment to Order Service via Feign.
  */
 @Service
@@ -93,12 +94,14 @@ public class DeliveryService {
     }
 
     /**
-     * Assigns a delivery partner. When partnerName is null, attempts auto-assignment
-     * (~90% success). When explicitly provided (manual admin assign), always uses that.
+     * Assigns a delivery partner. When partnerName is null, attempts
+     * auto-assignment
+     * (~90% success). When explicitly provided (manual admin assign), always uses
+     * that.
      * Persists delivery and syncs to Order Service.
      *
      * @param orderId order UUID
-     * @param req locations and optional partner name
+     * @param req     locations and optional partner name
      * @return delivery response with partner, charge, ETA
      */
     public DeliveryResponse assignDeliveryPartner(UUID orderId, DeliveryAssignRequest req) {
@@ -106,37 +109,37 @@ public class DeliveryService {
 
         Optional<Delivery> existing = deliveryRepository.findByOrderId(orderId);
 
-        String partnerName = req.getPartnerName();
-
-        // If not provided, try to auto-assign (sometimes no partner available)
-        if (partnerName == null || partnerName.isBlank()) {
-            partnerName = partnerNameGenerator.randomPartnerName();
-            if (partnerName == null) {
-                log.warn("No partner available for order: {}", orderId);
-                return new DeliveryResponse(null,
-                        BigDecimal.ZERO.setScale(Constants.MONEY_SCALE, Constants.MONEY_ROUNDING),
-                        Constants.NA,
-                        false,
-                        Constants.ASSIGN_FAIL_NO_PARTNER);
-            }
-        }
-
-        // Reuse estimation logic for charge + ETA
+        // ALWAYS calculate delivery charge & ETA first (Order Service needs this)
         DeliveryResponse estimate = estimateDelivery(req);
         BigDecimal deliveryCharge = estimate.getDeliveryCharge();
         String eta = estimate.getEta();
 
-        Delivery delivery = existing.orElse(new Delivery());
+        String partnerName = req.getPartnerName();
 
+        // If not provided, try to auto-assign
+        if (partnerName == null || partnerName.isBlank()) {
+            // 90% chance to get a partner, 10% chance null (simulated failure)
+            partnerName = partnerNameGenerator.randomPartnerName();
+        }
+
+        Delivery delivery = existing.orElse(new Delivery());
         delivery.setOrderId(orderId);
-        delivery.setPartnerName(partnerName);
+        delivery.setPartnerName(partnerName); // Can be null
         delivery.setDeliveryCharge(deliveryCharge);
         delivery.setEta(eta);
-        delivery.setStatus(DeliveryStatus.ASSIGNED);
+
+        boolean isAssigned = (partnerName != null);
+        if (isAssigned) {
+            delivery.setStatus(DeliveryStatus.ASSIGNED);
+        } else {
+            delivery.setStatus(DeliveryStatus.PENDING);
+            log.warn("Delivery partner not found (10% fail case) for order: {}. Setting status to PENDING.", orderId);
+        }
 
         deliveryRepository.save(delivery);
 
-        // Synchronous Sync Push to Order Service
+        // Synchronous Sync Push to Order Service (even if pending, to update valid
+        // charge)
         try {
             orderClient.syncOrder(new OrderSyncRequest(orderId, partnerName, eta, deliveryCharge));
             log.debug("Order sync sent for order: {}", orderId);
@@ -144,12 +147,23 @@ public class DeliveryService {
             log.error("Failed to sync order to Order Service: {}", orderId, e);
         }
 
-        return new DeliveryResponse(
-                partnerName,
-                deliveryCharge,
-                eta,
-                true,
-                Constants.ASSIGN_SUCCESS);
+        if (isAssigned) {
+            return new DeliveryResponse(
+                    partnerName,
+                    deliveryCharge,
+                    eta,
+                    true,
+                    Constants.ASSIGN_SUCCESS);
+        } else {
+            // Return success=true so Order Service proceeds with "PREPARING" order,
+            // but indicate pending manual assignment via message/null partner.
+            return new DeliveryResponse(
+                    null,
+                    deliveryCharge,
+                    eta,
+                    true,
+                    "Pending manual assignment");
+        }
 
     }
 
@@ -170,7 +184,7 @@ public class DeliveryService {
      * Updates delivery status for an order.
      *
      * @param orderId order UUID
-     * @param status new status
+     * @param status  new status
      * @return updated delivery entity
      */
     public Delivery updateStatus(UUID orderId, DeliveryStatus status) {

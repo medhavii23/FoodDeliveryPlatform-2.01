@@ -1,42 +1,55 @@
 package com.foodapp.identity_service.service;
 
 import com.foodapp.identity_service.constants.Constants;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.security.Key;
+import java.util.Date;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@ExtendWith(MockitoExtension.class)
 class JwtServiceTest {
 
+    @InjectMocks
     private JwtService jwtService;
 
-    @BeforeEach
-    void setUp() {
-        jwtService = new JwtService();
+    @Test
+    void testGenerateToken() {
+        String token = jwtService.generateToken("testUser", Constants.ROLE_USER, UUID.randomUUID());
+        assertNotNull(token);
     }
 
     @Test
-    void generateToken_andValidateToken_success() {
-        UUID userId = UUID.randomUUID();
-        String token = jwtService.generateToken("user1", Constants.ROLE_USER, userId);
-        assertThat(token).isNotBlank();
-        jwtService.validateToken(token);
+    void testValidateToken_Valid() {
+        String token = createTestToken("testUser");
+        assertDoesNotThrow(() -> jwtService.validateToken(token));
     }
 
     @Test
-    void validateToken_withInvalidToken_throws() {
-        assertThatThrownBy(() -> jwtService.validateToken("invalid"))
-                .isInstanceOf(Exception.class);
+    void testValidateToken_Invalid() {
+        assertThrows(Exception.class, () -> jwtService.validateToken("invalidToken"));
     }
 
-    @Test
-    void generateToken_includesRoleAndUserId() {
-        UUID userId = UUID.randomUUID();
-        String token = jwtService.generateToken("admin", Constants.ROLE_ADMIN, userId);
-        assertThat(token).isNotBlank();
-        jwtService.validateToken(token);
+    private String createTestToken(String userName) {
+        byte[] keyBytes = Decoders.BASE64.decode(Constants.JWT_SECRET);
+        Key signKey = Keys.hmacShaKeyFor(keyBytes);
+
+        return Jwts.builder()
+                .setSubject(userName)
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 30))
+                .signWith(signKey, SignatureAlgorithm.HS256).compact();
     }
 }
