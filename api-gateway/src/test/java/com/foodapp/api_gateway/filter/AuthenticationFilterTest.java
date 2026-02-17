@@ -42,9 +42,7 @@ class AuthenticationFilterTest {
     @InjectMocks
     private AuthenticationFilter authenticationFilter;
 
-    @BeforeEach
-    void setUp() {
-    }
+
 
     @Test
     void testApply_OpenEndpoint_ShouldBypassAuth() {
@@ -118,4 +116,86 @@ class AuthenticationFilterTest {
         // Act & Assert
         assertThrows(RuntimeException.class, () -> filter.filter(exchange, filterChain).block());
     }
+    @Test
+    void testApply_SecuredEndpoint_AuthHeaderWithoutBearerPrefix_ShouldStillWork() {
+        // Arrange
+        String token = "raw_token_without_bearer";
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/orders")
+                .header(HttpHeaders.AUTHORIZATION, token) // NO "Bearer "
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        Claims claims = new DefaultClaims(Map.of(
+                "sub", "testUser",
+                Constants.CLAIM_ROLE, "USER",
+                Constants.CLAIM_USER_ID, 123));
+
+        doNothing().when(jwtUtil).validateToken(token);
+        when(jwtUtil.extractAllClaims(token)).thenReturn(claims);
+        when(filterChain.filter(any())).thenReturn(Mono.empty());
+
+        GatewayFilter filter = authenticationFilter.apply(new AuthenticationFilter.Config());
+
+        // Act
+        filter.filter(exchange, filterChain).block();
+
+        // Assert
+        verify(jwtUtil).validateToken(token);
+        verify(filterChain).filter(any());
+    }
+    @Test
+    void testApply_SecuredEndpoint_ClaimsExtractionFails_ShouldThrowException() {
+        String token = "valid_but_claims_fail";
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/orders")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        doNothing().when(jwtUtil).validateToken(token);
+        when(jwtUtil.extractAllClaims(token))
+                .thenThrow(new RuntimeException("Claims error"));
+
+        GatewayFilter filter = authenticationFilter.apply(new AuthenticationFilter.Config());
+
+        assertThrows(RuntimeException.class,
+                () -> filter.filter(exchange, filterChain).block());
+    }
+
+    @Test
+    void testApply_SecuredEndpoint_NullAuthHeader_ShouldThrow() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/orders")
+                .header(HttpHeaders.AUTHORIZATION, (String) null)
+                .build();
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilter filter = authenticationFilter.apply(new AuthenticationFilter.Config());
+
+        assertThrows(RuntimeException.class, () -> filter.filter(exchange, filterChain).block());
+    }
+
+    @Test
+    void testApply_SecuredEndpoint_NullClaimsValues_ShouldStillPass() {
+        String token = "token";
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/orders")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build();
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        Claims claims = new DefaultClaims();
+        claims.setSubject("user"); // role + userId missing
+
+        doNothing().when(jwtUtil).validateToken(token);
+        when(jwtUtil.extractAllClaims(token)).thenReturn(claims);
+        when(filterChain.filter(any())).thenReturn(Mono.empty());
+
+        GatewayFilter filter = authenticationFilter.apply(new AuthenticationFilter.Config());
+
+        assertDoesNotThrow(() -> filter.filter(exchange, filterChain).block());
+    }
+
+    
+
 }

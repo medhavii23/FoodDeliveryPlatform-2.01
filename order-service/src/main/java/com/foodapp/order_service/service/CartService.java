@@ -273,7 +273,7 @@ public class CartService {
      * Creates a new ACTIVE cart for the customer and persists it.
      *
      * @param customerId the customer UUID
-     * @param customerName the customer name
+     * @param restaurantId the restaurant id
      * @param request incoming request containing restaurant name and delivery area
      * @return persisted {@link Cart} entity
      */

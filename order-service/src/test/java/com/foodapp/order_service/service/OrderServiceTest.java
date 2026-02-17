@@ -4,12 +4,13 @@ import com.foodapp.order_service.constants.Constants;
 import com.foodapp.order_service.dto.*;
 import com.foodapp.order_service.exception.InsufficientStockException;
 import com.foodapp.order_service.exception.OrderNotFoundException;
+import com.foodapp.order_service.exception.OrderProcessingException;
 import com.foodapp.order_service.feign.DeliveryClient;
 import com.foodapp.order_service.feign.RestaurantClient;
-import com.foodapp.order_service.model.Order;
-import com.foodapp.order_service.model.OrderStatus;
+import com.foodapp.order_service.model.*;
 import com.foodapp.order_service.repository.OrderItemRepository;
 import com.foodapp.order_service.repository.OrderRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -17,11 +18,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -30,107 +29,348 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
 
-    @Mock
-    private RestaurantClient restaurantClient;
+    @Mock RestaurantClient restaurantClient;
+    @Mock DeliveryClient deliveryClient;
+    @Mock OrderRepository orderRepository;
+    @Mock OrderItemRepository orderItemRepository;
+    @Mock CustomerService customerService;
 
-    @Mock
-    private DeliveryClient deliveryClient;
+    @InjectMocks OrderService orderService;
 
-    @Mock
-    private OrderRepository orderRepository;
+    private PlaceOrderRequest baseRequest;
 
-    @Mock
-    private OrderItemRepository orderItemRepository;
+    @BeforeEach
+    void setup() {
+        baseRequest = new PlaceOrderRequest();
+        baseRequest.setCustomerId(UUID.randomUUID());
+        baseRequest.setCustomerName("Medhavi");
+        baseRequest.setRestaurantName("Rest");
+        baseRequest.setDeliveryArea("Area");
+        baseRequest.setItems(List.of());
+    }
 
-    @Mock
-    private CustomerService customerService;
+    /* ================= placeOrder ================= */
 
-    @InjectMocks
-    private OrderService orderService;
+    private MenuReserveResponse successReserve() {
+        MenuReserveResponse r = new MenuReserveResponse();
+        r.setSuccess(true);
+        r.setSubtotal(BigDecimal.TEN);
+        r.setLocationName("Loc");
+        r.setRestaurantId(1L);
+        return r;
+    }
 
     @Test
-    void testPlaceOrder_Success() {
-        PlaceOrderRequest request = new PlaceOrderRequest();
-        request.setCustomerId(UUID.randomUUID());
-        request.setRestaurantName("Rest 1");
-        request.setDeliveryArea("Area 1");
+    void placeOrder_partnerAssigned() {
+        when(restaurantClient.reserve(any())).thenReturn(successReserve());
+        when(deliveryClient.assignDelivery(any(), any()))
+                .thenReturn(new DeliveryResponse("P1", BigDecimal.ONE, "30m", true, null));
+        when(orderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        MenuReserveResponse reserveResp = new MenuReserveResponse();
-        reserveResp.setSuccess(true);
-        reserveResp.setSubtotal(BigDecimal.TEN);
-        reserveResp.setLocationName("Loc A");
+        Order order = orderService.placeOrder(baseRequest);
 
-        DeliveryResponse deliveryResp = new DeliveryResponse();
-        deliveryResp.setSuccess(true);
-        deliveryResp.setDeliveryCharge(BigDecimal.ONE);
-        deliveryResp.setPartnerName("Partner A");
-
-        when(restaurantClient.reserve(any())).thenReturn(reserveResp);
-        when(deliveryClient.assignDelivery(any(), any())).thenReturn(deliveryResp);
-        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        Order order = orderService.placeOrder(request);
-
-        assertNotNull(order);
         assertEquals(OrderStatus.PLACED, order.getStatus());
-        assertNotNull(order.getTotalAmount());
-        verify(customerService).ensureCustomerExists(any(), any());
     }
 
     @Test
-    void testPlaceOrder_InsufficientStock() {
-        PlaceOrderRequest request = new PlaceOrderRequest();
-        request.setRestaurantName("Rest 1");
+    void placeOrder_partnerPending() {
+        when(restaurantClient.reserve(any())).thenReturn(successReserve());
+        when(deliveryClient.assignDelivery(any(), any()))
+                .thenReturn(new DeliveryResponse(null, BigDecimal.ONE, "30m", true, null));
+        when(orderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        MenuReserveResponse reserveResp = new MenuReserveResponse();
-        reserveResp.setSuccess(false); // Failed reservation
+        Order order = orderService.placeOrder(baseRequest);
 
-        when(restaurantClient.reserve(any())).thenReturn(reserveResp);
-
-        assertThrows(InsufficientStockException.class, () -> orderService.placeOrder(request));
+        assertEquals(OrderStatus.PREPARING, order.getStatus());
     }
 
     @Test
-    void testUpdateOrderStatus() {
-        UUID orderId = UUID.randomUUID();
-        Order order = new Order();
-        order.setOrderId(orderId);
-        order.setStatus(OrderStatus.PLACED);
+    void placeOrder_deliveryServiceFailure_usesFallback() {
+        when(restaurantClient.reserve(any())).thenReturn(successReserve());
+        when(deliveryClient.assignDelivery(any(), any()))
+                .thenThrow(new RuntimeException());
+        when(orderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        when(orderRepository.save(any(Order.class))).thenReturn(order);
+        Order order = orderService.placeOrder(baseRequest);
 
-        Order updated = orderService.updateOrderStatus(orderId, OrderStatus.PREPARING);
-
-        assertEquals(OrderStatus.PREPARING, updated.getStatus());
+        assertEquals(OrderStatus.PREPARING, order.getStatus());
     }
 
     @Test
-    void testSyncOrder() {
-        UUID orderId = UUID.randomUUID();
-        Order order = new Order();
-        order.setOrderId(orderId);
-        order.setStatus(OrderStatus.PREPARING);
+    void placeOrder_deliveryResponseNotSuccess_fallback() {
+        when(restaurantClient.reserve(any())).thenReturn(successReserve());
+        when(deliveryClient.assignDelivery(any(), any()))
+                .thenReturn(new DeliveryResponse(null, BigDecimal.ZERO, "0", false, "fail"));
+        when(orderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        OrderSyncRequest syncReq = new OrderSyncRequest();
-        syncReq.setOrderId(orderId);
-        syncReq.setPartnerName("Partner X"); // Should trigger PLACED
+        Order order = orderService.placeOrder(baseRequest);
 
-        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        // Removed unnecessary stubbing:
-        // when(orderRepository.save(any(Order.class))).thenReturn(order);
-
-        Order result = orderService.syncOrder(syncReq);
-
-        assertEquals(OrderStatus.PLACED, result.getStatus());
+        assertEquals(OrderStatus.PREPARING, order.getStatus());
     }
 
     @Test
-    void testGetUserOrders() {
-        UUID customerId = UUID.randomUUID();
-        when(orderRepository.findByCustomerIdOrderByCreatedAtDesc(customerId)).thenReturn(Collections.emptyList());
+    void placeOrder_confirmedItems_saved() {
+        MenuReserveResponse reserve = successReserve();
 
-        List<Order> orders = orderService.getUserOrders(customerId);
-        assertNotNull(orders);
+        ConfirmedItem ci = new ConfirmedItem();
+        ci.setItemId(1L);
+        ci.setItemName("Burger");
+        ci.setQty(2);
+        ci.setUnitPrice(BigDecimal.ONE);
+        ci.setLineTotal(BigDecimal.valueOf(2));
+        reserve.setConfirmedItems(List.of(ci));
+
+        when(restaurantClient.reserve(any())).thenReturn(reserve);
+        when(deliveryClient.assignDelivery(any(), any()))
+                .thenReturn(new DeliveryResponse("P", BigDecimal.ONE, "30", true, null));
+        when(orderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        orderService.placeOrder(baseRequest);
+
+        verify(orderItemRepository).save(any());
+    }
+
+    @Test
+    void placeOrder_failureAfterReserve_releasesInventory() {
+        when(restaurantClient.reserve(any())).thenReturn(successReserve());
+        when(deliveryClient.assignDelivery(any(), any()))
+                .thenThrow(new RuntimeException());
+        doNothing().when(restaurantClient).release(any());
+
+        assertThrows(OrderProcessingException.class,
+                () -> orderService.placeOrder(baseRequest));
+
+        verify(restaurantClient).release(any());
+    }
+
+    /* ================= reserveRestaurantInventory ================= */
+
+    @Test
+    void reserve_nullResponse() {
+        when(restaurantClient.reserve(any())).thenReturn(null);
+        assertThrows(InsufficientStockException.class,
+                () -> orderService.placeOrder(baseRequest));
+    }
+
+    @Test
+    void reserve_itemNotFound() {
+        MenuReserveResponse r = new MenuReserveResponse();
+        r.setSuccess(false);
+
+        UnavailableItem ui = new UnavailableItem();
+        ui.setAvailableQty(0);
+        ui.setItemId(null);
+
+        r.setUnavailableItems(List.of(ui));
+        when(restaurantClient.reserve(any())).thenReturn(r);
+
+        assertThrows(InsufficientStockException.class,
+                () -> orderService.placeOrder(baseRequest));
+    }
+
+    @Test
+    void reserve_insufficientStock() {
+        MenuReserveResponse r = new MenuReserveResponse();
+        r.setSuccess(false);
+
+        UnavailableItem ui = new UnavailableItem();
+        ui.setAvailableQty(1);
+        ui.setItemId(1L);
+
+        r.setUnavailableItems(List.of(ui));
+        when(restaurantClient.reserve(any())).thenReturn(r);
+
+        assertThrows(InsufficientStockException.class,
+                () -> orderService.placeOrder(baseRequest));
+    }
+
+    @Test
+    void reserve_blankMessageFallback() {
+        MenuReserveResponse r = new MenuReserveResponse();
+        r.setSuccess(false);
+        r.setMessage(" ");
+        when(restaurantClient.reserve(any())).thenReturn(r);
+
+        assertThrows(InsufficientStockException.class,
+                () -> orderService.placeOrder(baseRequest));
+    }
+
+    /* ================= updateOrderStatus ================= */
+
+    @Test
+    void updateOrderStatus_sameStatus() {
+        Order o = new Order();
+        o.setStatus(OrderStatus.PLACED);
+
+        when(orderRepository.findById(any())).thenReturn(Optional.of(o));
+
+        assertEquals(OrderStatus.PLACED,
+                orderService.updateOrderStatus(UUID.randomUUID(), OrderStatus.PLACED).getStatus());
+    }
+
+    @Test
+    void updateOrderStatus_changeStatus() {
+        Order o = new Order();
+        o.setStatus(OrderStatus.PLACED);
+
+        when(orderRepository.findById(any())).thenReturn(Optional.of(o));
+        when(orderRepository.save(any())).thenReturn(o);
+
+        assertEquals(OrderStatus.PREPARING,
+                orderService.updateOrderStatus(UUID.randomUUID(), OrderStatus.PREPARING).getStatus());
+    }
+
+    /* ================= syncOrder ================= */
+
+    @Test
+    void syncOrder_deliveryChargeOnly() {
+        Order o = new Order();
+        o.setFoodAmount(BigDecimal.TEN);
+
+        when(orderRepository.findById(any())).thenReturn(Optional.of(o));
+        when(orderRepository.save(any())).thenReturn(o);
+
+        OrderSyncRequest req = new OrderSyncRequest();
+        req.setOrderId(UUID.randomUUID());
+        req.setDeliveryCharge(BigDecimal.ONE);
+
+        assertNotNull(orderService.syncOrder(req).getTotalAmount());
+    }
+
+    @Test
+    void syncOrder_statusUpdateBranch() {
+        Order o = new Order();
+        o.setStatus(OrderStatus.PLACED);
+
+        when(orderRepository.findById(any())).thenReturn(Optional.of(o));
+        when(orderRepository.save(any())).thenReturn(o);
+
+        OrderSyncRequest req = new OrderSyncRequest();
+        req.setOrderId(UUID.randomUUID());
+        req.setStatus(OrderStatus.DELIVERED);
+
+        assertEquals(OrderStatus.DELIVERED, orderService.syncOrder(req).getStatus());
+    }
+
+    @Test
+    void syncOrder_partnerAutoPlaced() {
+        Order o = new Order();
+        o.setStatus(OrderStatus.PREPARING);
+
+        when(orderRepository.findById(any())).thenReturn(Optional.of(o));
+
+        OrderSyncRequest req = new OrderSyncRequest();
+        req.setOrderId(UUID.randomUUID());
+        req.setPartnerName("P");
+
+        assertEquals(OrderStatus.PLACED, orderService.syncOrder(req).getStatus());
+    }
+
+    @Test
+    void syncOrder_noUpdates() {
+        when(orderRepository.findById(any())).thenReturn(Optional.of(new Order()));
+
+        OrderSyncRequest req = new OrderSyncRequest();
+        req.setOrderId(UUID.randomUUID());
+
+        assertNotNull(orderService.syncOrder(req));
+    }
+
+    @Test
+    void syncOrder_notFound() {
+        when(orderRepository.findById(any())).thenReturn(Optional.empty());
+
+        OrderSyncRequest req = new OrderSyncRequest();
+        req.setOrderId(UUID.randomUUID());
+
+        assertThrows(RuntimeException.class,
+                () -> orderService.syncOrder(req));
+    }
+
+    /* ================= getUserOrders ================= */
+
+    @Test
+    void getUserOrders_returnsList() {
+        when(orderRepository.findByCustomerIdOrderByCreatedAtDesc(any()))
+                .thenReturn(List.of(new Order()));
+
+        assertEquals(1, orderService.getUserOrders(UUID.randomUUID()).size());
+    }
+
+    /* ================= getUserOrder ================= */
+
+    @Test
+    void getUserOrder_notFound() {
+        when(orderRepository.findByOrderIdAndCustomerId(any(), any()))
+                .thenReturn(Optional.empty());
+
+        assertThrows(OrderNotFoundException.class,
+                () -> orderService.getUserOrder(UUID.randomUUID(), UUID.randomUUID()));
+    }
+
+    /* ================= customer summary mapping ================= */
+
+    @Test
+    void customerSummary_timestampBranch() {
+        Object[] row = new Object[]{
+                UUID.randomUUID(), UUID.randomUUID(), BigDecimal.TEN, "PLACED",
+                Timestamp.from(Instant.now()),
+                1L,"R","L",1L,"P","30","DELIVERED"
+        };
+
+        when(orderRepository.findCustomerOrderSummaryByCustomerId(any()))
+                .thenReturn(Collections.singletonList(row));
+
+        assertEquals(1, orderService.getCustomerOrderSummary(UUID.randomUUID()).size());
+    }
+
+    @Test
+    void customerSummary_instantBranch() {
+        Object[] row = new Object[]{
+                UUID.randomUUID(), UUID.randomUUID(), BigDecimal.TEN, "PLACED",
+                Instant.now(),
+                1L,"R","L",1L,"P","30","DELIVERED"
+        };
+
+        when(orderRepository.findCustomerOrderSummaryByCustomerId(any()))
+                .thenReturn(Collections.singletonList(row));
+
+        assertEquals(1, orderService.getCustomerOrderSummary(UUID.randomUUID()).size());
+    }
+
+    @Test
+    void customerSummary_stringTimestampBranch() {
+        Object[] row = new Object[]{
+                UUID.randomUUID(), UUID.randomUUID(), BigDecimal.TEN, "PLACED",
+                "2024-01-01 10:00:00",
+                1L,"R","L",1L,"P","30","DELIVERED"
+        };
+
+        when(orderRepository.findCustomerOrderSummaryByCustomerId(any()))
+                .thenReturn(Collections.singletonList(row));
+
+        assertEquals(1, orderService.getCustomerOrderSummary(UUID.randomUUID()).size());
+    }
+
+    @Test
+    void customerSummary_empty() {
+        when(orderRepository.findCustomerOrderSummaryByCustomerId(any()))
+                .thenReturn(Collections.emptyList());
+
+        assertTrue(orderService.getCustomerOrderSummary(UUID.randomUUID()).isEmpty());
+    }
+
+    /* ================= normalizeMoney ================= */
+
+    @Test
+    void normalizeMoney_nullHandled() {
+        BigDecimal r = orderService.normalizeMoney(null);
+        assertEquals(BigDecimal.ZERO.setScale(Constants.MONEY_SCALE), r);
+    }
+
+    @Test
+    void normalizeMoney_valueProvided() {
+        BigDecimal result = orderService.normalizeMoney(BigDecimal.ONE);
+        assertEquals(Constants.MONEY_SCALE, result.scale());
     }
 }

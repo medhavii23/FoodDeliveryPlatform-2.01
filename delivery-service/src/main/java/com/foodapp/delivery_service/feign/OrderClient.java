@@ -7,6 +7,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 @FeignClient(name = "ORDER-SERVICE")
 public interface OrderClient {
-    @PostMapping("/api/orders/sync")
+    @PostMapping("/api/cart/orders/sync")
     void syncOrder(@RequestBody OrderSyncRequest syncReq);
 }

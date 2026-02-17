@@ -1,6 +1,10 @@
 package com.foodapp.identity_service.constants;
 
 public class Constants {
+
+    private Constants() {
+    }
+
     public static final String ROLE_ADMIN = "ADMIN";
     public static final String ROLE_USER = "USER";
 

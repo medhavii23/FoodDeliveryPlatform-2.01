@@ -15,6 +15,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.util.Collections;
 import java.util.Optional;
@@ -72,8 +73,8 @@ class RestaurantControllerTest {
         req.setRestaurantName("Rest 1");
         req.setOpeningTime(LocalTime.MIN);
         req.setClosingTime(LocalTime.MAX);
-        req.setLatitude(1.0);
-        req.setLongitude(1.0);
+        req.setLatitude(BigDecimal.valueOf(1.0));
+        req.setLongitude(BigDecimal.valueOf(1.0));
         req.setLocationName("Loc 1");
 
         Restaurant r = new Restaurant();

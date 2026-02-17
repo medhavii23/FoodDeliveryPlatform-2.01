@@ -113,14 +113,13 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<configuration>
-					<mainClass>
-						com.foodapp.delivery_service.DeliveryServiceApplication
-					</mainClass>
+
 					<excludes>
 						<exclude>
 							<groupId>org.projectlombok</groupId>
 							<artifactId>lombok</artifactId>
 						</exclude>
+						<exclude>**/constants/**</exclude>
 					</excludes>
 				</configuration>
 			</plugin>

@@ -143,11 +143,9 @@ public class RestaurantService {
                                 .filter(item -> {
                                         if (isVeg != null && !isVeg.equals(item.getIsVeg()))
                                                 return false;
-                                        if (category != null && !category.isEmpty() &&
-                                                        (item.getCategory() == null || !item.getCategory()
-                                                                        .equalsIgnoreCase(category)))
-                                                return false;
-                                        return true;
+                                    return category == null || category.isEmpty() ||
+                                            (item.getCategory() != null && item.getCategory()
+                                                    .equalsIgnoreCase(category));
                                 })
                                 .map(menuItem -> new MenuItemResponse(
                                                 menuItem.getMenuItemId(),

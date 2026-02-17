@@ -14,6 +14,10 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.lang.reflect.Method;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -34,50 +38,178 @@ class DeliveryControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    // -------------------------
+    // Happy paths (already had)
+    // -------------------------
+
     @Test
-    void testEstimateDelivery() throws Exception {
+    void testEstimateDelivery_created() throws Exception {
         DeliveryAssignRequest req = new DeliveryAssignRequest("Loc A", "Loc B", null);
-        DeliveryResponse resp = new DeliveryResponse();
-        when(deliveryService.estimateDelivery(any())).thenReturn(resp);
+        when(deliveryService.estimateDelivery(any())).thenReturn(new DeliveryResponse());
 
         mockMvc.perform(post("/api/delivery/estimate")
-                .header(Constants.AUTH_ROLE, "USER")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(req)))
+                        .header(Constants.AUTH_ROLE, "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isCreated());
     }
 
     @Test
-    void testAssignDelivery() throws Exception {
+    void testAssignDelivery_created_admin() throws Exception {
         DeliveryAssignRequest req = new DeliveryAssignRequest("Loc A", "Loc B", "Partner 1");
-        DeliveryResponse resp = new DeliveryResponse();
-        when(deliveryService.assignDeliveryPartner(any(), any())).thenReturn(resp);
+        when(deliveryService.assignDeliveryPartner(any(), any())).thenReturn(new DeliveryResponse());
 
         mockMvc.perform(post("/api/delivery/assign/" + UUID.randomUUID())
-                .header(Constants.AUTH_ROLE, Constants.ROLE_ADMIN)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(req)))
+                        .header(Constants.AUTH_ROLE, Constants.ROLE_ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isCreated());
     }
 
     @Test
-    void testTrack() throws Exception {
-        Delivery delivery = new Delivery();
-        when(deliveryService.track(any())).thenReturn(delivery);
+    void testTrack_ok() throws Exception {
+        when(deliveryService.track(any())).thenReturn(new Delivery());
 
         mockMvc.perform(get("/api/delivery/" + UUID.randomUUID())
-                .header(Constants.AUTH_ROLE, "USER"))
+                        .header(Constants.AUTH_ROLE, "USER"))
                 .andExpect(status().isOk());
     }
 
     @Test
-    void testUpdateStatus() throws Exception {
-        Delivery delivery = new Delivery();
-        when(deliveryService.updateStatus(any(), eq(DeliveryStatus.DELIVERED))).thenReturn(delivery);
+    void testUpdateStatus_ok_admin() throws Exception {
+        when(deliveryService.updateStatus(any(), eq(DeliveryStatus.DELIVERED))).thenReturn(new Delivery());
 
         mockMvc.perform(put("/api/delivery/" + UUID.randomUUID() + "/status")
-                .param("status", "DELIVERED")
-                .header(Constants.AUTH_ROLE, Constants.ROLE_ADMIN))
+                        .param("status", "DELIVERED")
+                        .header(Constants.AUTH_ROLE, Constants.ROLE_ADMIN))
                 .andExpect(status().isOk());
     }
+
+    // -------------------------
+    // Validation / parse errors
+    // -------------------------
+
+    @Test
+    void testEstimateDelivery_validationFail_400() throws Exception {
+        // DTO has @NotBlank, so blanks -> 400
+        DeliveryAssignRequest invalid = new DeliveryAssignRequest("   ", "   ", null);
+
+        mockMvc.perform(post("/api/delivery/estimate")
+                        .header(Constants.AUTH_ROLE, "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalid)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testAssignDelivery_validationFail_400() throws Exception {
+        // invalid restaurantLocation triggers @Valid -> 400
+        DeliveryAssignRequest invalid = new DeliveryAssignRequest("", "Loc B", "Partner 1");
+
+        mockMvc.perform(post("/api/delivery/assign/" + UUID.randomUUID())
+                        .header(Constants.AUTH_ROLE, Constants.ROLE_ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalid)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testEstimateDelivery_malformedJson_400() throws Exception {
+        mockMvc.perform(post("/api/delivery/estimate")
+                        .header(Constants.AUTH_ROLE, "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{not-valid-json}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testUpdateStatus_invalidEnum_shouldReturn500_dueToGlobalHandler() throws Exception {
+        mockMvc.perform(put("/api/delivery/" + UUID.randomUUID() + "/status")
+                        .param("status", "NOT_A_STATUS")
+                        .header(Constants.AUTH_ROLE, Constants.ROLE_ADMIN))
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    void testEstimateDelivery_missingRoleHeader_shouldReturn500_dueToGlobalHandler() throws Exception {
+        DeliveryAssignRequest req = new DeliveryAssignRequest("Loc A", "Loc B", null);
+
+        mockMvc.perform(post("/api/delivery/estimate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    void cover_checkUserOrAdmin_roleNull_branch_viaReflection() throws Exception {
+        DeliveryController controller = new DeliveryController();
+
+        Method m = DeliveryController.class.getDeclaredMethod("checkUserOrAdmin", String.class);
+        m.setAccessible(true);
+
+        assertThatThrownBy(() -> {
+            try {
+                m.invoke(controller, new Object[]{ null });
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                throw (RuntimeException) e.getCause(); // unwrap
+            }
+        }).isInstanceOf(RuntimeException.class)
+                .hasMessageContaining(Constants.ACCESS_DENIED_MISSING_ROLE);
+    }
+
+    @Test
+    void cover_checkAdmin_adminBranch_viaReflection() throws Exception {
+        DeliveryController controller = new DeliveryController();
+
+        Method m = DeliveryController.class.getDeclaredMethod("checkAdmin", String.class);
+        m.setAccessible(true);
+
+        // Should NOT throw for ADMIN (covers the "if condition false" branch directly)
+        m.invoke(controller, Constants.ROLE_ADMIN);
+    }
+
+
+
+    // -------------------------
+    // Branch coverage for role checks
+    // -------------------------
+
+    @Test
+    void testEstimateDelivery_emptyRole_500() throws Exception {
+        DeliveryAssignRequest req = new DeliveryAssignRequest("Loc A", "Loc B", null);
+
+        mockMvc.perform(post("/api/delivery/estimate")
+                        .header(Constants.AUTH_ROLE, "") // checkUserOrAdmin -> throws RuntimeException
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    void testTrack_emptyRole_500() throws Exception {
+        mockMvc.perform(get("/api/delivery/" + UUID.randomUUID())
+                        .header(Constants.AUTH_ROLE, "")) // checkUserOrAdmin -> throws
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    void testAssignDelivery_notAdmin_500() throws Exception {
+        DeliveryAssignRequest req = new DeliveryAssignRequest("Loc A", "Loc B", "Partner 1");
+
+        mockMvc.perform(post("/api/delivery/assign/" + UUID.randomUUID())
+                        .header(Constants.AUTH_ROLE, "USER") // checkAdmin -> throws RuntimeException
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    void testUpdateStatus_notAdmin_500() throws Exception {
+        mockMvc.perform(put("/api/delivery/" + UUID.randomUUID() + "/status")
+                        .param("status", "DELIVERED")
+                        .header(Constants.AUTH_ROLE, "USER")) // checkAdmin -> throws
+                .andExpect(status().isInternalServerError());
+    }
+
+
 }

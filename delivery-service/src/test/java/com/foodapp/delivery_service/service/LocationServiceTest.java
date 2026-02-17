@@ -27,6 +27,34 @@ class LocationServiceTest {
     }
 
     @Test
+    void getLatLng_supportsDotVariant_TDotNagar() {
+        // Map key is "T Nagar" but service supports dot variant via cleanKey/cleanArea
+        BigDecimal[] coords = locationService.getLatLng("T. Nagar");
+
+        assertThat(coords).hasSize(2);
+        // should match "T Nagar" coords from AREA map
+        assertThat(coords[0]).isEqualByComparingTo(BigDecimal.valueOf(13.0418));
+        assertThat(coords[1]).isEqualByComparingTo(BigDecimal.valueOf(80.2336));
+    }
+
+    @Test
+    void getLatLng_supportsCrazySpacesAndDots_usesCleanCompareBranch() {
+        BigDecimal[] coords = locationService.getLatLng("  T .   Nagar  ");
+
+        assertThat(coords).hasSize(2);
+        assertThat(coords[0]).isEqualByComparingTo(BigDecimal.valueOf(13.0418));
+        assertThat(coords[1]).isEqualByComparingTo(BigDecimal.valueOf(80.2336));
+    }
+
+    @Test
+    void getLatLng_blankString_throwsUnknown() {
+        assertThatThrownBy(() -> locationService.getLatLng("   "))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining(Constants.LOCATION_UNKNOWN);
+    }
+
+
+    @Test
     void getLatLng_caseInsensitive_returnsCoords() {
         BigDecimal[] coords = locationService.getLatLng("anna nagar");
         assertThat(coords).hasSize(2);

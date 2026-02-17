@@ -8,6 +8,12 @@ class ApiGatewayApplicationTests {
 
 	@Test
 	void contextLoads() {
+		// context validation
 	}
 
+	@Test
+	void main_should_start_application() {
+		ApiGatewayApplication.main(new String[]{});
+	}
 }
+

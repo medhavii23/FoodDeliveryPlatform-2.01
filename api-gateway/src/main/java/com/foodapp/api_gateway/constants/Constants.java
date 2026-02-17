@@ -1,6 +1,10 @@
 package com.foodapp.api_gateway.constants;
 
 public class Constants {
+
+    private Constants() {
+    }
+
     // JWT Configuration
     public static final String JWT_SECRET = "5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437";
     public static final String BEARER_PREFIX = "Bearer ";

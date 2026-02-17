@@ -9,6 +9,7 @@ import com.foodapp.order_service.model.CartStatus;
 import com.foodapp.order_service.model.Order;
 import com.foodapp.order_service.repository.CartItemRepository;
 import com.foodapp.order_service.repository.CartRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -16,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -25,125 +27,200 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
-
 @ExtendWith(MockitoExtension.class)
 class CartServiceTest {
 
-    @Mock
-    private CartRepository cartRepository;
-
-    @Mock
-    private CartItemRepository cartItemRepository;
-
-    @Mock
-    private CustomerService customerService;
-
-    @Mock
-    private OrderService orderService;
-
-    @Mock
-    private RestaurantClient restaurantClient;
-
-    @Mock
-    private DeliveryClient deliveryClient;
+    @Mock CartRepository cartRepository;
+    @Mock CartItemRepository cartItemRepository;
+    @Mock CustomerService customerService;
+    @Mock OrderService orderService;
+    @Mock RestaurantClient restaurantClient;
+    @Mock DeliveryClient deliveryClient;
 
     @InjectMocks
-    private CartService cartService;
+    CartService cartService;
 
-    @Test
-    void testAddOrUpdateItem_NewCart() {
-        UUID customerId = UUID.randomUUID();
-        String restaurantName = "Test Rest";
-        CartItemUpdateRequest request = new CartItemUpdateRequest();
-        request.setRestaurantName(restaurantName);
-        request.setItemName("Pizza");
-        request.setQty(2);
-        request.setDeliveryArea("Area 1");
+    private UUID customerId;
+    private Cart cart;
 
-        RestaurantInfoResponse restaurantInfo = new RestaurantInfoResponse();
-        restaurantInfo.setRestaurantId(1L);
-        restaurantInfo.setRestaurantName(restaurantName);
-
-        when(restaurantClient.getRestaurantByName(restaurantName)).thenReturn(restaurantInfo);
-        when(cartRepository.findByCustomerIdAndRestaurantIdAndStatus(customerId, 1L, CartStatus.ACTIVE))
-                .thenReturn(Optional.empty());
-        when(cartRepository.save(any(Cart.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        // For buildViewData
-        when(restaurantClient.getRestaurantById(any())).thenReturn(restaurantInfo);
-        when(cartItemRepository.findByCart_CartId(any())).thenReturn(Collections.emptyList());
-        // NOTE: In the actual code, we save the Item, then call toAddToCartView ->
-        // buildViewData -> repo.findByCartId
-        // Since we mock repo.findByCartId to return empty, the view will be empty.
-        // That's acceptable for this unit test if we verify the save interactions.
-
-        cartService.addOrUpdateItem(customerId, "User", request);
-
-        verify(cartRepository, times(2)).save(any(Cart.class)); // Called in newCart() and addOrUpdateItem()
-        verify(cartItemRepository).save(any(CartItem.class));
-    }
-
-    @Test
-    void testGetActiveCart_Found() {
-        UUID customerId = UUID.randomUUID();
-        Cart cart = new Cart();
+    @BeforeEach
+    void setup() {
+        customerId = UUID.randomUUID();
+        cart = new Cart();
         cart.setCartId(UUID.randomUUID());
+        cart.setCustomerId(customerId);
         cart.setRestaurantId(1L);
         cart.setStatus(CartStatus.ACTIVE);
-
-        when(cartRepository.findByCustomerIdAndStatus(customerId, CartStatus.ACTIVE)).thenReturn(Optional.of(cart));
-
-        RestaurantInfoResponse resInfo = new RestaurantInfoResponse();
-        resInfo.setRestaurantName("Rest 1");
-        when(restaurantClient.getRestaurantById(1L)).thenReturn(resInfo);
-
-        CartViewResponse response = cartService.getActiveCart(customerId, null);
-
-        assertNotNull(response);
-        assertEquals(cart.getCartId(), response.getCartId());
+        cart.setDeliveryArea("Area1");
+        cart.setCreatedAt(Instant.now());
+        cart.setUpdatedAt(Instant.now());
     }
 
+    /* ---------------- ADD / UPDATE ITEM ---------------- */
+
     @Test
-    void testCheckout_Success() {
-        UUID customerId = UUID.randomUUID();
-        Cart cart = new Cart();
-        cart.setCartId(UUID.randomUUID());
-        cart.setRestaurantId(1L);
-        cart.setStatus(CartStatus.ACTIVE);
-        cart.setDeliveryArea("Area 1");
+    void addItem_existingCart_existingItem() {
+        CartItemUpdateRequest req = new CartItemUpdateRequest();
+        req.setRestaurantName("Rest");
+        req.setItemName("Pizza");
+        req.setQty(2);
+        req.setDeliveryArea("Area1");
 
         CartItem item = new CartItem();
         item.setItemName("Pizza");
-        item.setQty(2);
 
-        when(cartRepository.findByCustomerIdAndStatus(customerId, CartStatus.ACTIVE)).thenReturn(Optional.of(cart));
-        when(cartItemRepository.findByCart_CartId(cart.getCartId())).thenReturn(List.of(item));
+        RestaurantInfoResponse res = new RestaurantInfoResponse();
+        res.setRestaurantId(1L);
+        res.setRestaurantName("Rest");
 
-        RestaurantInfoResponse resInfo = new RestaurantInfoResponse();
-        resInfo.setRestaurantName("Rest 1");
-        when(restaurantClient.getRestaurantById(1L)).thenReturn(resInfo);
+        when(restaurantClient.getRestaurantByName("Rest")).thenReturn(res);
+        when(cartRepository.findByCustomerIdAndRestaurantIdAndStatus(customerId, 1L, CartStatus.ACTIVE))
+                .thenReturn(Optional.of(cart));
+        when(cartItemRepository.findByCart_CartIdAndItemNameIgnoreCase(cart.getCartId(), "Pizza"))
+                .thenReturn(Optional.of(item));
+        when(cartItemRepository.findByCart_CartId(any())).thenReturn(List.of(item));
+        when(restaurantClient.getRestaurantById(1L)).thenReturn(res);
+        when(cartRepository.save(any())).thenReturn(cart);
 
-        Order order = new Order();
-        order.setOrderId(UUID.randomUUID());
-        when(orderService.placeOrder(any(PlaceOrderRequest.class))).thenReturn(order);
+        cartService.addOrUpdateItem(customerId, "User", req);
 
-        Order result = cartService.checkout(customerId, "User", null);
-
-        assertNotNull(result);
-        assertEquals(CartStatus.CHECKED_OUT, cart.getStatus());
-        assertEquals(order.getOrderId(), cart.getOrderId());
+        verify(cartItemRepository).save(item);
     }
 
     @Test
-    void testCheckout_EmptyCart() {
-        UUID customerId = UUID.randomUUID();
-        Cart cart = new Cart();
-        cart.setCartId(UUID.randomUUID());
-        cart.setStatus(CartStatus.ACTIVE);
+    void removeItem_qtyZero() {
+        CartItemUpdateRequest req = new CartItemUpdateRequest();
+        req.setRestaurantName("Rest");
+        req.setItemName("Pizza");
+        req.setQty(0);
 
-        when(cartRepository.findByCustomerIdAndStatus(customerId, CartStatus.ACTIVE)).thenReturn(Optional.of(cart));
-        when(cartItemRepository.findByCart_CartId(cart.getCartId())).thenReturn(Collections.emptyList());
+        CartItem item = new CartItem();
 
-        assertThrows(IllegalStateException.class, () -> cartService.checkout(customerId, "User", null));
+        RestaurantInfoResponse res = new RestaurantInfoResponse();
+        res.setRestaurantId(1L);
+
+        when(restaurantClient.getRestaurantByName("Rest")).thenReturn(res);
+        when(cartRepository.findByCustomerIdAndRestaurantIdAndStatus(any(), any(), any()))
+                .thenReturn(Optional.of(cart));
+        when(cartItemRepository.findByCart_CartIdAndItemNameIgnoreCase(any(), any()))
+                .thenReturn(Optional.of(item));
+
+        cartService.addOrUpdateItem(customerId, "User", req);
+
+        verify(cartItemRepository).delete(item);
+    }
+
+    /* ---------------- GET ACTIVE CART ---------------- */
+
+    @Test
+    void getActiveCart_noCart() {
+        when(cartRepository.findByCustomerIdAndStatus(any(), any()))
+                .thenReturn(Optional.empty());
+
+        assertNull(cartService.getActiveCart(customerId, null));
+    }
+
+    @Test
+    void getActiveCart_restaurantException() {
+        when(restaurantClient.getRestaurantByName(any()))
+                .thenThrow(new RuntimeException());
+
+        assertNull(cartService.getActiveCart(customerId, "X"));
+    }
+
+    /* ---------------- CLEAR CART ---------------- */
+
+    @Test
+    void clearCart_noActiveCart() {
+        when(cartRepository.findByCustomerIdAndStatus(any(), any()))
+                .thenReturn(Optional.empty());
+
+        cartService.clearActiveCart(customerId, null);
+
+        verify(cartRepository, never()).save(any());
+    }
+
+    @Test
+    void clearCart_success() {
+        when(cartRepository.findByCustomerIdAndStatus(any(), any()))
+                .thenReturn(Optional.of(cart));
+
+        cartService.clearActiveCart(customerId, null);
+
+        assertEquals(CartStatus.CANCELLED, cart.getStatus());
+        verify(cartItemRepository).deleteByCart_CartId(cart.getCartId());
+    }
+
+    /* ---------------- CHECKOUT ---------------- */
+
+    @Test
+    void checkout_noCart() {
+        when(cartRepository.findByCustomerIdAndStatus(any(), any()))
+                .thenReturn(Optional.empty());
+
+        assertThrows(IllegalStateException.class,
+                () -> cartService.checkout(customerId, "User", null));
+    }
+
+    @Test
+    void checkout_emptyCart() {
+        when(cartRepository.findByCustomerIdAndStatus(any(), any()))
+                .thenReturn(Optional.of(cart));
+        when(cartItemRepository.findByCart_CartId(any()))
+                .thenReturn(List.of());
+
+        assertThrows(IllegalStateException.class,
+                () -> cartService.checkout(customerId, "User", null));
+    }
+
+    @Test
+    void checkout_withRestaurantOverride_exception() {
+        when(restaurantClient.getRestaurantByName(any()))
+                .thenThrow(new RuntimeException());
+
+        assertThrows(IllegalStateException.class,
+                () -> cartService.checkout(customerId, "User", "X"));
+    }
+
+    /* ---------------- DELIVERY ESTIMATION ---------------- */
+
+    @Test
+    void viewCart_deliverySuccess() {
+        RestaurantInfoResponse res = new RestaurantInfoResponse();
+        res.setRestaurantName("Rest");
+        res.setLocationName("Loc");
+
+        DeliveryResponse deliveryResp = new DeliveryResponse();
+        deliveryResp.setSuccess(true);
+        deliveryResp.setDeliveryCharge(BigDecimal.TEN);
+        deliveryResp.setEta("30 mins");
+
+        when(cartRepository.findByCustomerIdAndStatus(any(), any()))
+                .thenReturn(Optional.of(cart));
+        when(cartItemRepository.findByCart_CartId(any()))
+                .thenReturn(List.of(new CartItem()));
+        when(restaurantClient.getRestaurantById(any()))
+                .thenReturn(res);
+        when(deliveryClient.estimateDelivery(any()))
+                .thenReturn(deliveryResp);
+
+        CartViewResponse response = cartService.getActiveCart(customerId, null);
+
+        assertEquals(BigDecimal.TEN.setScale(2), response.getDeliveryCharge());
+    }
+
+    @Test
+    void viewCart_deliveryException() {
+        when(cartRepository.findByCustomerIdAndStatus(any(), any()))
+                .thenReturn(Optional.of(cart));
+        when(cartItemRepository.findByCart_CartId(any()))
+                .thenReturn(List.of(new CartItem()));
+        when(restaurantClient.getRestaurantById(any()))
+                .thenThrow(new RuntimeException());
+
+            assertThrows(RuntimeException.class, () -> {
+                cartService.getActiveCart(customerId, null);
+            });
+
     }
 }

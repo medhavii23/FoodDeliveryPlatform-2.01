@@ -8,6 +8,12 @@ class IdentityServiceApplicationTests {
 
 	@Test
 	void contextLoads() {
+		// Ensures Spring context loads
 	}
 
+	@Test
+	void mainMethodRuns() {
+		// Explicitly execute main() to cover it
+		IdentityServiceApplication.main(new String[] {});
+	}
 }

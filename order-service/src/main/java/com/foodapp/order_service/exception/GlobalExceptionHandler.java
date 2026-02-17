@@ -8,9 +8,11 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestControllerAdvice
@@ -22,6 +24,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleCustomerNotFound(CustomerNotFoundException ex, HttpServletRequest req){
         return build(HttpStatus.NOT_FOUND, ex.getMessage(),req.getRequestURI(),null);
     }
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiError> handleResponseStatus(
+            ResponseStatusException ex, HttpServletRequest req) {
+
+        return build(
+                HttpStatus.valueOf(ex.getStatusCode().value()),
+                ex.getReason(),
+                req.getRequestURI(),
+                null
+        );
+    }
+
 
     @ExceptionHandler(InvalidCustomerCredentialsException.class)
     public ResponseEntity<ApiError> handleInvalidCustomer(InvalidCustomerCredentialsException ex, HttpServletRequest req){
@@ -29,9 +43,20 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(InsufficientStockException.class)
-    public ResponseEntity<ApiError> handleInsufficientStock(InsufficientStockException ex, HttpServletRequest req) {
-        return build(HttpStatus.CONFLICT, ex.getMessage(), req.getRequestURI(), Map.of("items", ex.getFailures()));
+    public ResponseEntity<ApiError> handleInsufficientStock(
+            InsufficientStockException ex, HttpServletRequest req) {
+
+        return build(
+                HttpStatus.CONFLICT,
+                ex.getMessage(),
+                req.getRequestURI(),
+                Map.of(
+                        "items",
+                        ex.getFailures() == null ? List.of() : ex.getFailures()
+                )
+        );
     }
+
 
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<ApiError> handleOrderNotFound(OrderNotFoundException ex, HttpServletRequest req) {
@@ -46,9 +71,14 @@ public class GlobalExceptionHandler {
             return build(HttpStatus.BAD_GATEWAY, ex.getMessage(), req.getRequestURI(),
                     Map.of("downstreamStatus", fe.status(), REASON, fe.getMessage()));
         }
+        Map<String, Object> details = new LinkedHashMap<>();
+        if (cause != null) {
+            details.put(REASON, cause.getMessage());
+        }
 
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), req.getRequestURI(),
-                Map.of(REASON, cause == null ? null : cause.getMessage()));
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(),
+                req.getRequestURI(), details.isEmpty() ? null : details);
+
     }
 
 

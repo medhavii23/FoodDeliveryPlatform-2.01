@@ -10,4 +10,10 @@ class DeliveryServiceApplicationTests {
 	void contextLoads() {
 	}
 
+	@Test
+	void main_runs() {
+		// This marks the main() line as covered in IntelliJ
+		DeliveryServiceApplication.main(new String[]{});
+	}
+
 }

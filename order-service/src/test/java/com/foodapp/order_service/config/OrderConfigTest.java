@@ -21,7 +21,7 @@ class OrderConfigTest {
     void testDeliveryClientConfig() {
         DeliveryClientConfig config = new DeliveryClientConfig();
         RequestTemplate template = new RequestTemplate();
-        config.authRoleInterceptor().apply(template);
+        config.deliveryAuthRoleInterceptor().apply(template);
         assertTrue(template.headers().containsKey("X-Auth-Role"));
     }
 
@@ -29,7 +29,7 @@ class OrderConfigTest {
     void testRestaurantClientConfig() {
         RestaurantClientConfig config = new RestaurantClientConfig();
         RequestTemplate template = new RequestTemplate();
-        config.authRoleInterceptor().apply(template);
+        config.restaurantAuthRoleInterceptor().apply(template);
         assertTrue(template.headers().containsKey("X-Auth-Role"));
     }
 }

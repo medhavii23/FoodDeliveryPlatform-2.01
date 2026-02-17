@@ -307,7 +307,7 @@ public class OrderService {
         order.setCustomerId(request.getCustomerId());
         order.setRestaurantId(reserveResp.getRestaurantId());
         order.setFoodAmount(subtotal);
-        order.setBeyond2kmCharge(deliveryCharge);
+        order.setDeliveryCharge(deliveryCharge);
         order.setTotalAmount(total);
 
         OrderStatus status = deliveryResp.isSuccess() && deliveryResp.getPartnerName() != null
@@ -447,14 +447,20 @@ public class OrderService {
         boolean updated = false;
 
         if (syncReq.getDeliveryCharge() != null) {
-            order.setBeyond2kmCharge(syncReq.getDeliveryCharge());
-            // Recalculate total amount
+            BigDecimal dc = normalizeMoney(syncReq.getDeliveryCharge());
+            order.setDeliveryCharge(dc);
+
             BigDecimal foodAmount = order.getFoodAmount() != null
                     ? order.getFoodAmount()
                     : BigDecimal.ZERO;
-            order.setTotalAmount(foodAmount.add(syncReq.getDeliveryCharge()));
+
+            order.setTotalAmount(
+                    normalizeMoney(foodAmount).add(dc)
+                            .setScale(Constants.MONEY_SCALE, Constants.MONEY_ROUNDING)
+            );
             updated = true;
         }
+
 
         if (syncReq.getStatus() != null) {
             order.setStatus(syncReq.getStatus());
@@ -560,7 +566,7 @@ public class OrderService {
      * @param value monetary value
      * @return normalized amount
      */
-    private BigDecimal normalizeMoney(BigDecimal value) {
+    BigDecimal normalizeMoney(BigDecimal value) {
         return Objects.requireNonNullElse(value, BigDecimal.ZERO).setScale(Constants.MONEY_SCALE,
                 Constants.MONEY_ROUNDING);
     }

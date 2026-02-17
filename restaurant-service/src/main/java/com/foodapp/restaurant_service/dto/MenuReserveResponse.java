@@ -12,7 +12,7 @@ import java.util.Map;
 @Setter
 @AllArgsConstructor
 public class MenuReserveResponse {
-    private Boolean success;
+    private boolean success;
     private String message;
 
     private Long restaurantId;

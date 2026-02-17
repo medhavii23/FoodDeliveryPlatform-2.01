@@ -12,12 +12,12 @@ import com.foodapp.order_service.service.CartService;
 import com.foodapp.order_service.service.CustomerService;
 import com.foodapp.order_service.service.OrderService;
 import jakarta.validation.Valid;
-import jakarta.ws.rs.ForbiddenException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -52,14 +52,16 @@ public class CartController {
     private CustomerService customerService;
 
     /**
-     * Verifies that the caller has admin role; throws {@link ForbiddenException} otherwise.
      *
      * @param role the role from auth header
      */
     private void checkAdmin(String role) {
         if (!Constants.ROLE_ADMIN.equals(role)) {
             log.warn("Access denied: non-admin role attempted admin operation");
-            throw new ForbiddenException(Constants.ACCESS_DENIED_ADMIN);
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    Constants.ACCESS_DENIED_ADMIN
+            );
         }
     }
 
