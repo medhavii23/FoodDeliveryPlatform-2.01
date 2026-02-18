@@ -30,6 +30,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -251,6 +252,101 @@ class CartControllerTest {
                         .header(Constants.AUTH_ROLE, "USER")
                         .param("status", OrderStatus.PLACED.name()))
                 .andExpect(status().isForbidden());
+    }
+    @Test
+    void addItem_authUserNull_usesCustomerNameHeader() throws Exception {
+        CartItemUpdateRequest request = new CartItemUpdateRequest();
+        request.setRestaurantName("Rest");
+        request.setDeliveryArea("Area");
+        request.setItemName("Item");
+        request.setQty(1);
+
+        when(cartService.addOrUpdateItem(any(), any(), any()))
+                .thenReturn(new AddToCartResponse());
+
+        mockMvc.perform(post("/api/cart/items")
+                        .header(Constants.AUTH_ID, CUSTOMER_ID)
+                        .header(Constants.CUSTOMER_NAME, "FallbackUser")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+    }
+    @Test
+    void clearCart_missingAuthId_shouldFail() throws Exception {
+        mockMvc.perform(delete("/api/cart/my"))
+                .andExpect(status().isBadRequest());
+    }
+    @Test
+    void myOrders_userPresent_customerIdNull_shouldSkipVerification() throws Exception {
+        mockMvc.perform(get("/api/cart/orders")
+                        .header(Constants.AUTH_USER, "User"))
+                .andExpect(status().isOk());
+    }
+    @Test
+    void myOrder_customerIdNull_shouldSkipVerification() throws Exception {
+        when(orderService.getUserOrder(any(), any()))
+                .thenReturn(new Order());
+
+        mockMvc.perform(get("/api/cart/orders/{id}", ORDER_ID)
+                        .header(Constants.AUTH_USER, "User"))
+                .andExpect(status().isOk());
+    }
+    @Test
+    void checkout_authUserPresent_overridesCustomerName() throws Exception {
+        when(cartService.checkout(any(), any(), any()))
+                .thenReturn(new Order());
+
+        mockMvc.perform(post("/api/cart/checkout")
+                        .header(Constants.AUTH_ID, CUSTOMER_ID)
+                        .header(Constants.AUTH_USER, "PrimaryUser")
+                        .header(Constants.CUSTOMER_NAME, "FallbackUser"))
+                .andExpect(status().isCreated());
+    }
+    @Test
+    void getCart_withRestaurantFilter() throws Exception {
+        when(cartService.getActiveCart(any(), any()))
+                .thenReturn(new CartViewResponse());
+
+        mockMvc.perform(get("/api/cart/my")
+                        .header(Constants.AUTH_ID, CUSTOMER_ID)
+                        .param("restaurantName", "Rest"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void updateStatus_missingRoleHeader_shouldFail() throws Exception {
+        mockMvc.perform(put("/api/cart/orders/{id}/status", ORDER_ID)
+                        .param("status", OrderStatus.PLACED.name()))
+                .andExpect(status().isInternalServerError());
+
+    }
+
+    @Test
+    void myOrders_verificationFails_shouldReturnError() throws Exception {
+
+        doThrow(new IllegalArgumentException("Invalid customer"))
+                .when(customerService)
+                .verifyOrThrow(any(), any());
+
+        mockMvc.perform(get("/api/cart/orders")
+                        .header(Constants.AUTH_ID, CUSTOMER_ID)
+                        .header(Constants.AUTH_USER, "User"))
+                .andExpect(status().isBadRequest()); // or 400 depending on your handler
+    }
+
+
+    @Test
+    void myOrder_verificationFails_shouldReturnError() throws Exception {
+
+        doThrow(new IllegalArgumentException("Invalid customer"))
+                .when(customerService)
+                .verifyOrThrow(any(), any());
+
+        mockMvc.perform(get("/api/cart/orders/{id}", ORDER_ID)
+                        .header(Constants.AUTH_ID, CUSTOMER_ID)
+                        .header(Constants.AUTH_USER, "User"))
+                .andExpect(status().isBadRequest());
+
     }
 
 

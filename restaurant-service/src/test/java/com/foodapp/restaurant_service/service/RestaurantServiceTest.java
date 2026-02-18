@@ -141,4 +141,178 @@ class RestaurantServiceTest {
         menu = restaurantService.getMenu(1L, false, null);
         assertTrue(menu.isEmpty());
     }
+    @Test
+    void testGetMenu_categoryEmpty_branch() {
+        MenuItem item = new MenuItem();
+        item.setItemName("Item 1");
+        item.setAvailable(true);
+        item.setIsVeg(true);
+        item.setCategory("Starters");
+
+        when(menuItemRepository.findByRestaurantRestaurantId(1L))
+                .thenReturn(List.of(item));
+
+        List<MenuItemResponse> menu =
+                restaurantService.getMenu(1L, null, "");
+
+        assertEquals(1, menu.size());
+    }
+
+    @Test
+    void testGetMenu_itemCategoryNull_branch() {
+        MenuItem item = new MenuItem();
+        item.setItemName("Item 1");
+        item.setAvailable(true);
+        item.setIsVeg(true);
+        item.setCategory(null);
+
+        when(menuItemRepository.findByRestaurantRestaurantId(1L))
+                .thenReturn(List.of(item));
+
+        List<MenuItemResponse> menu =
+                restaurantService.getMenu(1L, null, "Starters");
+
+        assertTrue(menu.isEmpty());
+    }
+
+    @Test
+    void testGetMenu_categoryNotMatching_branch() {
+        MenuItem item = new MenuItem();
+        item.setItemName("Item 1");
+        item.setAvailable(true);
+        item.setIsVeg(true);
+        item.setCategory("Main");
+
+        when(menuItemRepository.findByRestaurantRestaurantId(1L))
+                .thenReturn(List.of(item));
+
+        List<MenuItemResponse> menu =
+                restaurantService.getMenu(1L, null, "Starters");
+
+        assertTrue(menu.isEmpty());
+    }
+
+    @Test
+    void testGetMenu_itemIsVegNull_branch() {
+        MenuItem item = new MenuItem();
+        item.setItemName("Item 1");
+        item.setAvailable(true);
+        item.setIsVeg(null);
+        item.setCategory("Starters");
+
+        when(menuItemRepository.findByRestaurantRestaurantId(1L))
+                .thenReturn(List.of(item));
+
+        List<MenuItemResponse> menu =
+                restaurantService.getMenu(1L, true, null);
+
+        assertTrue(menu.isEmpty());
+    }
+    @Test
+    void testGetAllRestaurants_nonEmpty_branch() {
+        Restaurant r = new Restaurant();
+        r.setRestaurantId(1L);
+        r.setRestaurantName("Rest 1");
+        r.setLocationName("Loc 1");
+
+        when(restaurantRepository.findAll()).thenReturn(List.of(r));
+
+        List<RestaurantLocationResponse> list =
+                restaurantService.getAllRestaurants();
+
+        assertEquals(1, list.size());
+        assertEquals("Rest 1", list.get(0).getRestaurantName());
+    }
+
+    @Test
+    void testGetRestaurantByName_notFound_branch() {
+        when(restaurantRepository.findByRestaurantNameIgnoreCase("Unknown"))
+                .thenReturn(Optional.empty());
+
+        Optional<RestaurantLocationResponse> res =
+                restaurantService.getRestaurantByName("Unknown");
+
+        assertTrue(res.isEmpty());
+    }
+
+    @Test
+    void testGetRestaurantById_notFound_branch() {
+        when(restaurantRepository.findById(99L))
+                .thenReturn(Optional.empty());
+
+        Optional<RestaurantLocationResponse> res =
+                restaurantService.getRestaurantById(99L);
+
+        assertTrue(res.isEmpty());
+    }
+
+
+    @Test
+    void testIsRestaurantOpen_BeforeOpening() {
+        Restaurant r = new Restaurant();
+        r.setOpeningTime(LocalTime.now().plusHours(1));
+        r.setClosingTime(LocalTime.now().plusHours(2));
+
+        assertFalse(restaurantService.isRestaurantOpen(r));
+    }
+
+    @Test
+    void testIsRestaurantOpen_AfterClosing() {
+        Restaurant r = new Restaurant();
+        r.setOpeningTime(LocalTime.now().minusHours(2));
+        r.setClosingTime(LocalTime.now().minusHours(1));
+
+        assertFalse(restaurantService.isRestaurantOpen(r));
+    }
+
+    @Test
+    void testGetMenu_isVegTrueMatch_branch() {
+        MenuItem item = new MenuItem();
+        item.setItemName("Item 1");
+        item.setAvailable(true);
+        item.setIsVeg(true);
+        item.setCategory("Starters");
+
+        when(menuItemRepository.findByRestaurantRestaurantId(1L))
+                .thenReturn(List.of(item));
+
+        List<MenuItemResponse> menu =
+                restaurantService.getMenu(1L, true, null);
+
+        assertEquals(1, menu.size());
+    }
+
+    @Test
+    void testGetMenu_categoryCaseInsensitiveMatch_branch() {
+        MenuItem item = new MenuItem();
+        item.setItemName("Item 1");
+        item.setAvailable(true);
+        item.setIsVeg(true);
+        item.setCategory("Starters");
+
+        when(menuItemRepository.findByRestaurantRestaurantId(1L))
+                .thenReturn(List.of(item));
+
+        List<MenuItemResponse> menu =
+                restaurantService.getMenu(1L, null, "starters");
+
+        assertEquals(1, menu.size());
+    }
+
+    @Test
+    void testAddRestaurant_IdReset_branch() {
+        Restaurant r = new Restaurant();
+        r.setRestaurantId(99L);
+        r.setRestaurantName("Test Rest");
+
+        when(restaurantRepository.save(any(Restaurant.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        Restaurant saved = restaurantService.addRestaurant(r);
+
+        assertNull(saved.getRestaurantId());
+    }
+
+
+
 }

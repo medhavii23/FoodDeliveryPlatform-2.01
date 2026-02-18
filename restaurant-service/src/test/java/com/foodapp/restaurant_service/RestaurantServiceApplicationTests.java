@@ -9,5 +9,10 @@ class RestaurantServiceApplicationTests {
 	@Test
 	void contextLoads() {
 	}
+	@Test
+	void testMain() {
+		RestaurantServiceApplication.main(new String[]{});
+	}
+
 
 }

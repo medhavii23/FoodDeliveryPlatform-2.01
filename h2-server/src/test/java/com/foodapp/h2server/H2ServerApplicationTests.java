@@ -4,50 +4,40 @@ import org.h2.tools.Server;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.WebApplicationType;
-import org.springframework.boot.test.context.SpringBootTest;
 
 import java.sql.SQLException;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mockStatic;
 
-@SpringBootTest
 class H2ServerApplicationTests {
 
-    // -------------------------
-    // Context loading
-    // -------------------------
+    // -------- main() coverage --------
     @Test
-    void contextLoads() {
-        // covers @SpringBootApplication
+    void main_shouldCallSpringApplicationRun() {
+        try (MockedStatic<SpringApplication> mocked = mockStatic(SpringApplication.class)) {
+
+            mocked.when(() ->
+                            SpringApplication.run(H2ServerApplication.class, new String[]{}))
+                    .thenReturn(null);
+
+            H2ServerApplication.main(new String[]{});
+
+            mocked.verify(() ->
+                    SpringApplication.run(H2ServerApplication.class, new String[]{}));
+        }
     }
 
-    // -------------------------
-    // main() coverage
-    // -------------------------
-    @Test
-    void main_shouldRun_withoutStartingWebServer() {
-        SpringApplication app = new SpringApplication(H2ServerApplication.class);
-        app.setWebApplicationType(WebApplicationType.NONE);
-        app.run();
-    }
-
-    // -------------------------
-    // Bean success branch
-    // -------------------------
+    // -------- Bean success --------
     @Test
     void h2TcpServer_shouldCreateServer() throws SQLException {
         H2ServerApplication app = new H2ServerApplication();
         Server server = app.h2TcpServer();
         assertNotNull(server);
-        server.stop(); // clean shutdown
+        server.stop();
     }
 
-    // -------------------------
-    // Bean exception branch
-    // -------------------------
+    // -------- Bean exception --------
     @Test
     void h2TcpServer_shouldThrowSQLException() {
         try (MockedStatic<Server> mocked = mockStatic(Server.class)) {

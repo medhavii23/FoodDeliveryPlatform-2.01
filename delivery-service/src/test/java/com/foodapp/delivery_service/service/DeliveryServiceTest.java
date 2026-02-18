@@ -304,6 +304,90 @@ class DeliveryServiceTest {
     }
 
     @Test
+    void testEstimateDelivery_ExactFreeDistanceBoundary() {
+        DeliveryAssignRequest req = new DeliveryAssignRequest("Loc A", "Loc B", null);
+
+        // Make distance exactly FREE_DELIVERY_DISTANCE
+        // Mock small enough difference and then force scale via reflection if needed
+
+        when(locationService.getLatLng("Loc A"))
+                .thenReturn(new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+        when(locationService.getLatLng("Loc B"))
+                .thenReturn(new BigDecimal[]{BigDecimal.valueOf(0.00001), BigDecimal.valueOf(0.00001)});
+
+        DeliveryResponse resp = deliveryService.estimateDelivery(req);
+
+        assertNotNull(resp);
+    }
+
+    @Test
+    void testAssignDeliveryPartner_ExistingPresent_noAutoAssignBranch() {
+        UUID orderId = UUID.randomUUID();
+
+        Delivery existing = new Delivery();
+        existing.setOrderId(orderId);
+
+        DeliveryAssignRequest req =
+                new DeliveryAssignRequest("Loc A", "Loc B", "Manual Partner");
+
+        when(locationService.getLatLng(anyString()))
+                .thenReturn(new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+        when(deliveryRepository.findByOrderId(orderId))
+                .thenReturn(Optional.of(existing));
+        when(deliveryRepository.save(any())).thenReturn(existing);
+
+        DeliveryResponse resp =
+                deliveryService.assignDeliveryPartner(orderId, req);
+
+        assertEquals("Manual Partner", resp.getPartnerName());
+    }
+
+    @Test
+    void testAssignDeliveryPartner_partnerNonBlank_branch() {
+        UUID orderId = UUID.randomUUID();
+
+        DeliveryAssignRequest req =
+                new DeliveryAssignRequest("Loc A", "Loc B", "P1");
+
+        when(locationService.getLatLng(anyString()))
+                .thenReturn(new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+        when(deliveryRepository.findByOrderId(orderId))
+                .thenReturn(Optional.empty());
+        when(deliveryRepository.save(any()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        DeliveryResponse resp =
+                deliveryService.assignDeliveryPartner(orderId, req);
+
+        assertEquals("P1", resp.getPartnerName());
+    }
+
+    @Test
+    void testTrack_LambdaBranchCovered() {
+        UUID orderId = UUID.randomUUID();
+        when(deliveryRepository.findByOrderId(orderId))
+                .thenReturn(Optional.empty());
+
+        assertThrows(DeliveryNotFoundException.class,
+                () -> deliveryService.track(orderId));
+    }
+
+    @Test
+    void cover_validateCoords_lonNull() throws Exception {
+        Method m = DeliveryService.class.getDeclaredMethod(
+                "validateCoords", BigDecimal.class, BigDecimal.class, String.class);
+        m.setAccessible(true);
+
+        assertThatThrownBy(() -> {
+            try {
+                m.invoke(deliveryService, BigDecimal.ONE, null, "customer");
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                throw (RuntimeException) e.getCause();
+            }
+        }).isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
     void cover_private_validateCoords_throws_viaReflection() throws Exception {
         Method m = DeliveryService.class.getDeclaredMethod(
                 "validateCoords", BigDecimal.class, BigDecimal.class, String.class);

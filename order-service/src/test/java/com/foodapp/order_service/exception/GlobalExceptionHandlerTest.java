@@ -97,6 +97,21 @@ class GlobalExceptionHandlerTest {
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
     }
 
+    @Test
+    void handleOrderProcessing_WithCauseMessageNull() {
+        RuntimeException cause = new RuntimeException((String) null);
+
+        OrderProcessingException ex =
+                new OrderProcessingException("Processing failed", cause);
+
+        ResponseEntity<ApiError> response =
+                exceptionHandler.handleOrderProcessing(ex, req);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+    }
+
+
+
 
     @Test
     void handleOrderNotFound() {
@@ -107,6 +122,25 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
+    @Test
+    void handleOrderProcessing_FeignDetailsBranch() {
+        Request request = Request.create(
+                Request.HttpMethod.GET, "url",
+                Collections.emptyMap(), null, null, null);
+
+        FeignException fe =
+                new FeignException.InternalServerError("Down", request, null, null);
+
+        OrderProcessingException ex =
+                new OrderProcessingException("Processing failed", fe);
+
+        ResponseEntity<ApiError> response =
+                exceptionHandler.handleOrderProcessing(ex, req);
+
+        assertEquals(HttpStatus.BAD_GATEWAY, response.getStatusCode());
+        assertNotNull(response.getBody().getDetails());
+    }
+
 
     // -------- OrderProcessingException branches --------
 
@@ -127,6 +161,17 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(HttpStatus.BAD_GATEWAY, response.getStatusCode());
     }
+    @Test
+    void handleFeign_StatusGreaterThan500() {
+        FeignException ex = mock(FeignException.class);
+        when(ex.status()).thenReturn(503);
+
+        ResponseEntity<ApiError> response =
+                exceptionHandler.handleFeign(ex, req);
+
+        assertEquals(HttpStatus.BAD_GATEWAY, response.getStatusCode());
+    }
+
 
     @Test
     void handleOrderProcessing_WithGenericCause() {

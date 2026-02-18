@@ -30,9 +30,6 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AuthenticationFilterTest {
 
-    @Spy
-    private RouteValidator validator = new RouteValidator();
-
     @Mock
     private JwtUtil jwtUtil;
 

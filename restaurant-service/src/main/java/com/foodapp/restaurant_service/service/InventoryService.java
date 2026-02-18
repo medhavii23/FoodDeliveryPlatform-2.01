@@ -163,10 +163,12 @@ public class InventoryService {
      * @return quote response (success with confirmed items and subtotal, or failure with message/unavailable items)
      */
     public MenuReserveResponse quote(MenuReserveRequest req) {
-        log.debug("quote restaurant: {}", req.getRestaurantName());
 
         MenuReserveResponse invalid = validateRequest(req);
         if (invalid != null) return invalid;
+
+        log.debug("quote restaurant: {}", req.getRestaurantName());
+
 
         Restaurant restaurant = fetchRestaurant(req.getRestaurantName());
         if (restaurant == null) {
@@ -236,10 +238,11 @@ public class InventoryService {
      */
     @Transactional
     public MenuReserveResponse reserve(MenuReserveRequest req) {
-        log.info("reserve restaurant: {} items: {}", req.getRestaurantName(), req.getItems() != null ? req.getItems().size() : 0);
 
         MenuReserveResponse invalid = validateRequest(req);
         if (invalid != null) return invalid;
+        log.info("reserve restaurant: {} items: {}", req.getRestaurantName(), req.getItems() != null ? req.getItems().size() : 0);
+
 
         Restaurant restaurant = fetchRestaurant(req.getRestaurantName());
         if (restaurant == null) {
@@ -333,10 +336,13 @@ public class InventoryService {
      */
     @Transactional
     public MenuReserveResponse release(MenuReserveRequest req) {
-        log.info("release restaurant: {} items: {}", req.getRestaurantName(), req.getItems() != null ? req.getItems().size() : 0);
 
         MenuReserveResponse invalid = validateRequest(req);
         if (invalid != null) return invalid;
+
+        log.info("release restaurant: {} items: {}", req.getRestaurantName(), req.getItems() != null ? req.getItems().size() : 0);
+
+
 
         Restaurant restaurant = fetchRestaurant(req.getRestaurantName());
         if (restaurant == null) {

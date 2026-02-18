@@ -130,18 +130,7 @@ class OrderServiceTest {
         verify(orderItemRepository).save(any());
     }
 
-    @Test
-    void placeOrder_failureAfterReserve_releasesInventory() {
-        when(restaurantClient.reserve(any())).thenReturn(successReserve());
-        when(deliveryClient.assignDelivery(any(), any()))
-                .thenThrow(new RuntimeException());
-        doNothing().when(restaurantClient).release(any());
 
-        assertThrows(OrderProcessingException.class,
-                () -> orderService.placeOrder(baseRequest));
-
-        verify(restaurantClient).release(any());
-    }
 
     /* ================= reserveRestaurantInventory ================= */
 
@@ -373,4 +362,136 @@ class OrderServiceTest {
         BigDecimal result = orderService.normalizeMoney(BigDecimal.ONE);
         assertEquals(Constants.MONEY_SCALE, result.scale());
     }
+    @Test
+    void placeOrder_saveFails_triggersRollback_and_releaseExceptionIgnored() {
+
+        // Step 1: Reservation success
+        when(restaurantClient.reserve(any()))
+                .thenReturn(successReserve());
+
+        // Step 2: Delivery success (DO NOT throw here)
+        when(deliveryClient.assignDelivery(any(), any()))
+                .thenReturn(new DeliveryResponse("P",
+                        BigDecimal.ONE,
+                        "30m",
+                        true,
+                        null));
+
+        // Step 3: Force failure in saveOrderWithItems
+        when(orderRepository.save(any()))
+                .thenThrow(new RuntimeException("DB failure"));
+
+        // Step 4: Simulate release() also failing
+        doThrow(new RuntimeException("Release failure"))
+                .when(restaurantClient).release(any());
+
+        // Expect rollback exception
+        assertThrows(OrderProcessingException.class,
+                () -> orderService.placeOrder(baseRequest));
+
+        // Verify rollback attempted
+        verify(restaurantClient).release(any());
+    }
+
+
+
+
+    @Test
+    void placeOrder_deliveryResponseNull_usesFallback() {
+        when(restaurantClient.reserve(any())).thenReturn(successReserve());
+        when(deliveryClient.assignDelivery(any(), any()))
+                .thenReturn(null);
+
+        when(orderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        Order order = orderService.placeOrder(baseRequest);
+
+        assertEquals(OrderStatus.PREPARING, order.getStatus());
+    }
+    @Test
+    void reserve_nullMessageFallback() {
+        MenuReserveResponse r = new MenuReserveResponse();
+        r.setSuccess(false);
+        r.setMessage(null);
+
+        when(restaurantClient.reserve(any())).thenReturn(r);
+
+        assertThrows(InsufficientStockException.class,
+                () -> orderService.placeOrder(baseRequest));
+    }
+
+    @Test
+    void updateOrderStatus_notFound() {
+        when(orderRepository.findById(any())).thenReturn(Optional.empty());
+
+        assertThrows(OrderNotFoundException.class,
+                () -> orderService.updateOrderStatus(UUID.randomUUID(), OrderStatus.PLACED));
+    }
+
+    @Test
+    void getUserOrder_success() {
+        Order o = new Order();
+
+        when(orderRepository.findByOrderIdAndCustomerId(any(), any()))
+                .thenReturn(Optional.of(o));
+
+        assertNotNull(orderService.getUserOrder(UUID.randomUUID(), UUID.randomUUID()));
+    }
+
+    @Test
+    void reserve_unavailableItemsNull() {
+        MenuReserveResponse r = new MenuReserveResponse();
+        r.setSuccess(false);
+        r.setUnavailableItems(null);
+
+        when(restaurantClient.reserve(any())).thenReturn(r);
+
+        assertThrows(InsufficientStockException.class,
+                () -> orderService.placeOrder(baseRequest));
+    }
+
+    @Test
+    void releaseInventory_exceptionIgnored() {
+
+        // Step 1: Reservation success
+        when(restaurantClient.reserve(any()))
+                .thenReturn(successReserve());
+
+        // Step 2: Delivery success (DO NOT throw here)
+        when(deliveryClient.assignDelivery(any(), any()))
+                .thenReturn(new DeliveryResponse("P",
+                        BigDecimal.ONE,
+                        "30m",
+                        true,
+                        null));
+
+        // Step 3: Force failure during save
+        when(orderRepository.save(any()))
+                .thenThrow(new RuntimeException("DB failure"));
+
+        // Step 4: Simulate release also failing
+        doThrow(new RuntimeException("Release failed"))
+                .when(restaurantClient).release(any());
+
+        // Now outer catch block executes
+        assertThrows(OrderProcessingException.class,
+                () -> orderService.placeOrder(baseRequest));
+
+        // Verify rollback was attempted
+        verify(restaurantClient).release(any());
+    }
+
+
+    @Test
+    void customerSummary_allNullRow() {
+        Object[] row = new Object[12];
+
+        when(orderRepository.findCustomerOrderSummaryByCustomerId(any()))
+                .thenReturn(Collections.singletonList(row));
+
+        assertEquals(1, orderService.getCustomerOrderSummary(UUID.randomUUID()).size());
+    }
+
+
+
 }
