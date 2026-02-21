@@ -308,7 +308,7 @@ public class CartService {
     /**
      * Loads cart items, fetches restaurant quote, and returns base view data (no delivery).
      */
-    private ViewData buildViewData(Cart cart, String customerName) {
+    private ViewData buildViewData(Cart cart) {
         List<CartItem> cartItems = cartItemRepository.findByCart_CartId(cart.getCartId());
         BigDecimal subtotal = BigDecimal.ZERO;
         List<CartItemView> itemViews;
@@ -357,7 +357,7 @@ public class CartService {
      * Builds add-to-cart response (no delivery charge or ETA).
      */
     private AddToCartResponse toAddToCartView(Cart cart, String customerName) {
-        ViewData data = buildViewData(cart, customerName);
+        ViewData data = buildViewData(cart);
         String restaurantName = data.restaurantInfo != null ? data.restaurantInfo.getRestaurantName() : null;
         BigDecimal total = data.subtotal;
         return new AddToCartResponse(
@@ -378,7 +378,7 @@ public class CartService {
      * Builds view-cart response with delivery estimate (deliveryCharge, eta, total).
      */
     private CartViewResponse toViewWithDelivery(Cart cart, String customerName) {
-        ViewData data = buildViewData(cart, customerName);
+        ViewData data = buildViewData(cart);
         String restaurantName = data.restaurantInfo != null ? data.restaurantInfo.getRestaurantName() : null;
 
         BigDecimal deliveryCharge = BigDecimal.ZERO;

@@ -32,43 +32,56 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
     @Override
     public GatewayFilter apply(Config config) {
         return ((exchange, chain) -> {
-            if (validator.isSecured.test(exchange.getRequest())) {
-                if (!exchange.getRequest().getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
+
+            if (validator.isSecured(exchange.getRequest())) {
+
+                if (!exchange.getRequest().getHeaders()
+                        .containsKey(HttpHeaders.AUTHORIZATION)) {
+
                     log.warn("Secured route accessed without Authorization header: {}",
                             exchange.getRequest().getURI().getPath());
+
                     throw new RuntimeException(Constants.ERROR_MISSING_AUTH_HEADER);
                 }
 
-                String authHeader = exchange.getRequest().getHeaders().get(HttpHeaders.AUTHORIZATION).get(0);
-                if (authHeader != null && authHeader.startsWith(Constants.BEARER_PREFIX)) {
-                    authHeader = authHeader.substring(Constants.BEARER_PREFIX_LENGTH);
+                String authHeader = exchange.getRequest()
+                        .getHeaders()
+                        .get(HttpHeaders.AUTHORIZATION)
+                        .get(0);
+
+                if (authHeader != null &&
+                        authHeader.startsWith(Constants.BEARER_PREFIX)) {
+
+                    authHeader = authHeader.substring(
+                            Constants.BEARER_PREFIX_LENGTH);
                 }
+
                 try {
                     jwtUtil.validateToken(authHeader);
                     Claims claims = jwtUtil.extractAllClaims(authHeader);
+
                     String username = claims.getSubject();
                     String role = claims.get(Constants.CLAIM_ROLE, String.class);
-                    String userId = String.valueOf(claims.get(Constants.CLAIM_USER_ID));
-
-                    log.debug("Authenticated request: user={} role={} path={}",
-                            username, role, exchange.getRequest().getURI().getPath());
+                    String userId = String.valueOf(
+                            claims.get(Constants.CLAIM_USER_ID));
 
                     return chain.filter(exchange.mutate().request(
-                            exchange.getRequest().mutate()
-                                    .header(Constants.HEADER_AUTH_USER, username)
-                                    .header(Constants.HEADER_AUTH_ROLE, role)
-                                    .header(Constants.HEADER_AUTH_ID, userId)
-                                    .build())
+                                    exchange.getRequest().mutate()
+                                            .header(Constants.HEADER_AUTH_USER, username)
+                                            .header(Constants.HEADER_AUTH_ROLE, role)
+                                            .header(Constants.HEADER_AUTH_ID, userId)
+                                            .build())
                             .build());
 
-                } catch (Exception e) {
-                    log.warn("Invalid or expired token: {}", Constants.ERROR_INVALID_ACCESS);
+                } catch (Exception _) {
                     throw new RuntimeException(Constants.ERROR_UNAUTHORIZED_ACCESS);
                 }
             }
+
             return chain.filter(exchange);
         });
     }
+
 
     /** Filter configuration (no-op for this filter). */
     public static class Config {

@@ -49,7 +49,7 @@ public class DeliveryService {
      */
     public DeliveryResponse estimateDelivery(DeliveryAssignRequest req) {
         log.debug("estimateDelivery from {} to {}", req.getRestaurantLocation(), req.getCustomerLocation());
-        BigDecimal deliveryCharge = BigDecimal.ZERO;
+        BigDecimal deliveryCharge;
         String eta = Constants.NA;
 
         String rLoc = req.getRestaurantLocation();
@@ -78,7 +78,7 @@ public class DeliveryService {
 
                 int et = (int) Math.ceil(distanceInKm * Constants.TIME_PER_KM);
                 eta = et + " mins";
-            } catch (Exception ex) {
+            } catch (Exception _) {
                 deliveryCharge = BigDecimal.ZERO.setScale(Constants.MONEY_SCALE, Constants.MONEY_ROUNDING);
             }
         } else {

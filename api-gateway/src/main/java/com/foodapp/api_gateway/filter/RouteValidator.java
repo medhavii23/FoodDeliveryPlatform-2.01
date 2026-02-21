@@ -5,7 +5,6 @@ import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.function.Predicate;
 
 /**
  * Determines which routes require authentication (secured vs open).
@@ -20,8 +19,14 @@ public class RouteValidator {
             Constants.ENDPOINT_AUTH_TOKEN,
             Constants.ENDPOINT_EUREKA);
 
-    /** True if the request is to a secured route (JWT required). */
-    public Predicate<ServerHttpRequest> isSecured = request -> openApiEndpoints
-            .stream()
-            .noneMatch(uri -> request.getURI().getPath().contains(uri));
+    /**
+     * Returns predicate that determines whether route is secured.
+     */
+    public boolean isSecured(ServerHttpRequest request) {
+        return openApiEndpoints
+                .stream()
+                .noneMatch(uri -> request.getURI().getPath().contains(uri));
+    }
+
+
 }
