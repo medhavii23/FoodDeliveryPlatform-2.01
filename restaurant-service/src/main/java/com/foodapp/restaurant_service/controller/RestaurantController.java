@@ -11,11 +11,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * REST controller for restaurant and menu operations.
  *
- * <p>Exposes endpoints for listing restaurants, searching by name/id,
+ * <p>
+ * Exposes endpoints for listing restaurants, searching by name/id,
  * adding restaurants and menu items (admin), and fetching restaurant menus.
  */
 @RestController
@@ -23,30 +25,6 @@ import java.util.List;
 public class RestaurantController {
 
     private static final Logger log = LoggerFactory.getLogger(RestaurantController.class);
-
-    /**
-     * Verifies caller has admin role; throws if not.
-     *
-     * @param role the role from X-Auth-Role header
-     */
-    private void checkAdmin(String role) {
-        if (!Constants.ROLE_ADMIN.equals(role)) {
-            log.warn("Access denied: non-admin role attempted admin operation");
-            throw new RuntimeException(Constants.ACCESS_DENIED_ADMIN);
-        }
-    }
-
-    /**
-     * Verifies caller has a role (user or admin); throws if missing.
-     *
-     * @param role the role from X-Auth-Role header
-     */
-    private void checkUserOrAdmin(String role) {
-        if (role == null || role.isEmpty()) {
-            log.debug("Access denied: missing role");
-            throw new RuntimeException(Constants.ACCESS_DENIED_MISSING_ROLE);
-        }
-    }
 
     @Autowired
     private RestaurantService restaurantService;
@@ -58,9 +36,7 @@ public class RestaurantController {
      * @return list of restaurant location responses
      */
     @GetMapping
-    public List<RestaurantLocationResponse> getAllRestaurants(
-            @RequestHeader("X-Auth-Role") String role) {
-        checkUserOrAdmin(role);
+    public List<RestaurantLocationResponse> getAllRestaurants() {
         log.debug("getAllRestaurants");
         return restaurantService.getAllRestaurants();
     }
@@ -73,10 +49,7 @@ public class RestaurantController {
      * @return restaurant location response
      */
     @GetMapping("/search")
-    public RestaurantLocationResponse getRestaurantByName(
-            @RequestHeader("X-Auth-Role") String role,
-            @RequestParam String name) {
-        checkUserOrAdmin(role);
+    public RestaurantLocationResponse getRestaurantByName(@RequestParam String name) {
         log.info("getRestaurantByName: {}", name);
         return restaurantService.getRestaurantByName(name)
                 .orElseThrow(() -> new RuntimeException("Restaurant not found: " + name));
@@ -85,15 +58,12 @@ public class RestaurantController {
     /**
      * Returns a restaurant by ID.
      *
-     * @param role caller role (user or admin required)
+     * @param role         caller role (user or admin required)
      * @param restaurantId restaurant ID
      * @return restaurant location response
      */
     @GetMapping("/{restaurantId}")
-    public RestaurantLocationResponse getRestaurantById(
-            @RequestHeader("X-Auth-Role") String role,
-            @PathVariable Long restaurantId) {
-        checkUserOrAdmin(role);
+    public RestaurantLocationResponse getRestaurantById(@PathVariable Long restaurantId) {
         log.debug("getRestaurantById: {}", restaurantId);
         return restaurantService.getRestaurantById(restaurantId)
                 .orElseThrow(() -> new RuntimeException("Restaurant not found: " + restaurantId));
@@ -102,15 +72,14 @@ public class RestaurantController {
     /**
      * Creates a new restaurant (admin only).
      *
-     * @param role caller role (must be admin)
+     * @param role       caller role (must be admin)
      * @param restaurant create request with name, times, location
      * @return saved restaurant entity
      */
     @PostMapping
     @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
-    public Restaurant addRestaurant(@RequestHeader("X-Auth-Role") String role,
-            @RequestBody @jakarta.validation.Valid CreateRestaurantRequest restaurant) {
-        checkAdmin(role);
+    @PreAuthorize("hasRole('ADMIN')")
+    public Restaurant addRestaurant(@RequestBody @jakarta.validation.Valid CreateRestaurantRequest restaurant) {
         Restaurant r = new Restaurant();
         r.setRestaurantName(restaurant.getRestaurantName());
         r.setOpeningTime(restaurant.getOpeningTime());
@@ -126,16 +95,16 @@ public class RestaurantController {
     /**
      * Adds a menu item to a restaurant (admin only).
      *
-     * @param role caller role (must be admin)
+     * @param role         caller role (must be admin)
      * @param restaurantId restaurant ID
-     * @param item menu item (name, price, stock, isVeg, category)
+     * @param item         menu item (name, price, stock, isVeg, category)
      * @return saved menu item
      */
     @PostMapping("/{restaurantId}/menu")
     @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
-    public MenuItem addMenuItem(@RequestHeader("X-Auth-Role") String role, @PathVariable Long restaurantId,
+    @PreAuthorize("hasRole('ADMIN')")
+    public MenuItem addMenuItem(@PathVariable Long restaurantId,
             @RequestBody @jakarta.validation.Valid CreateMenuItems item) {
-        checkAdmin(role);
         MenuItem i = new MenuItem();
         i.setItemName(item.getItemName());
         i.setPrice(item.getPrice());
@@ -147,11 +116,12 @@ public class RestaurantController {
     }
 
     /**
-     * Returns menu items for a restaurant, optionally filtered by isVeg and category.
+     * Returns menu items for a restaurant, optionally filtered by isVeg and
+     * category.
      *
      * @param restaurantId restaurant ID
-     * @param isVeg optional filter for vegetarian items
-     * @param category optional filter by category
+     * @param isVeg        optional filter for vegetarian items
+     * @param category     optional filter by category
      * @return list of menu item responses
      */
     @GetMapping("/{restaurantId}/menu")

@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 import java.util.UUID;
@@ -25,16 +26,19 @@ import java.util.UUID;
 /**
  * REST controller for cart and order operations.
  *
- * <p>Exposes endpoints for:
+ * <p>
+ * Exposes endpoints for:
  * <ul>
- *   <li>Adding/updating/removing cart items</li>
- *   <li>Viewing and clearing the active cart</li>
- *   <li>Checkout (convert cart to order)</li>
- *   <li>Listing and viewing customer orders</li>
- *   <li>Order summary, sync, and admin status updates</li>
+ * <li>Adding/updating/removing cart items</li>
+ * <li>Viewing and clearing the active cart</li>
+ * <li>Checkout (convert cart to order)</li>
+ * <li>Listing and viewing customer orders</li>
+ * <li>Order summary, sync, and admin status updates</li>
  * </ul>
  *
- * <p>Cart and order operations require {@code X-Auth-Id} (customer UUID) in headers.
+ * <p>
+ * Cart and order operations require {@code X-Auth-Id} (customer UUID) in
+ * headers.
  */
 @RestController
 @RequestMapping("/api/cart")
@@ -51,28 +55,15 @@ public class CartController {
     @Autowired
     private CustomerService customerService;
 
-    /**
-     *
-     * @param role the role from auth header
-     */
-    private void checkAdmin(String role) {
-        if (!Constants.ROLE_ADMIN.equals(role)) {
-            log.warn("Access denied: non-admin role attempted admin operation");
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    Constants.ACCESS_DENIED_ADMIN
-            );
-        }
-    }
-
     // --- Cart Operations ---
 
     /**
      * Adds or updates an item in the customer's cart for a restaurant.
      *
-     * @param request item update (restaurant name, delivery area, item name, quantity)
-     * @param authUser optional user name from auth
-     * @param authId customer UUID (required)
+     * @param request            item update (restaurant name, delivery area, item
+     *                           name, quantity)
+     * @param authUser           optional user name from auth
+     * @param authId             customer UUID (required)
      * @param customerNameHeader optional customer name from header
      * @return add-to-cart response with cart summary
      */
@@ -100,8 +91,8 @@ public class CartController {
     /**
      * Returns the customer's active cart, optionally filtered by restaurant.
      *
-     * @param authUser optional user name from auth
-     * @param authId customer UUID (required)
+     * @param authUser       optional user name from auth
+     * @param authId         customer UUID (required)
      * @param restaurantName optional filter by restaurant name
      * @return cart view or null if no active cart
      */
@@ -123,7 +114,7 @@ public class CartController {
     /**
      * Clears (cancels) the customer's active cart.
      *
-     * @param authId customer UUID (required)
+     * @param authId         customer UUID (required)
      * @param restaurantName optional filter by restaurant name
      */
     @DeleteMapping("/my")
@@ -144,17 +135,16 @@ public class CartController {
     /**
      * Converts the active cart to an order (checkout).
      *
-     * @param authUser optional user name from auth
-     * @param authId customer UUID (required)
+     * @param authUser           optional user name from auth
+     * @param authId             customer UUID (required)
      * @param customerNameHeader optional customer name from header
-     * @param restaurantName optional filter by restaurant
+     * @param restaurantName     optional filter by restaurant
      * @return the created order
      */
     @PostMapping("/checkout")
     @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public Order checkout(
-            @Valid
-            @RequestHeader(value = Constants.AUTH_USER, required = false) String authUser,
+            @Valid @RequestHeader(value = Constants.AUTH_USER, required = false) String authUser,
             @RequestHeader(value = Constants.AUTH_ID, required = false) UUID authId,
             @RequestHeader(value = Constants.CUSTOMER_NAME, required = false) String customerNameHeader,
             @RequestParam(value = "restaurantName", required = false) String restaurantName) {
@@ -174,8 +164,8 @@ public class CartController {
     /**
      * Returns all orders for the authenticated customer.
      *
-     * @param authUser optional user name from auth
-     * @param customerId customer UUID
+     * @param authUser     optional user name from auth
+     * @param customerId   customer UUID
      * @param customerName optional customer name from header
      * @return list of orders (newest first)
      */
@@ -196,9 +186,9 @@ public class CartController {
     /**
      * Returns a single order by ID for the authenticated customer.
      *
-     * @param orderId order UUID
-     * @param authUser optional user name from auth
-     * @param customerId customer UUID
+     * @param orderId      order UUID
+     * @param authUser     optional user name from auth
+     * @param customerId   customer UUID
      * @param customerName optional customer name from header
      * @return the order if found and owned by customer
      */
@@ -218,7 +208,8 @@ public class CartController {
     }
 
     /**
-     * Returns customer order summary with restaurant name and delivery partner (single query, normalized joins).
+     * Returns customer order summary with restaurant name and delivery partner
+     * (single query, normalized joins).
      *
      * @param customerId customer UUID (required)
      * @return list of order summary DTOs
@@ -251,17 +242,16 @@ public class CartController {
     /**
      * Updates order status (admin only).
      *
-     * @param role caller role (must be admin)
+     * @param role    caller role (must be admin)
      * @param orderId order UUID
-     * @param status new status
+     * @param status  new status
      * @return updated order
      */
     @PutMapping("/orders/{orderId}/status")
+    @PreAuthorize("hasRole('ADMIN')")
     public Order updateStatus(
-            @RequestHeader(Constants.AUTH_ROLE) String role,
             @PathVariable UUID orderId,
             @RequestParam OrderStatus status) {
-        checkAdmin(role);
         return orderService.updateOrderStatus(orderId, status);
     }
 }
