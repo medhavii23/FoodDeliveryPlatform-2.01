@@ -1,6 +1,5 @@
 package com.foodapp.restaurant_service.controller;
 
-import com.foodapp.restaurant_service.constants.Constants;
 import com.foodapp.restaurant_service.dto.*;
 import com.foodapp.restaurant_service.model.MenuItem;
 import com.foodapp.restaurant_service.model.Restaurant;
@@ -32,7 +31,6 @@ public class RestaurantController {
     /**
      * Returns all restaurants with id, name, and location.
      *
-     * @param role caller role (user or admin required)
      * @return list of restaurant location responses
      */
     @GetMapping
@@ -44,7 +42,6 @@ public class RestaurantController {
     /**
      * Returns a restaurant by exact name match (case-insensitive).
      *
-     * @param role caller role (user or admin required)
      * @param name restaurant name
      * @return restaurant location response
      */
@@ -58,7 +55,7 @@ public class RestaurantController {
     /**
      * Returns a restaurant by ID.
      *
-     * @param role         caller role (user or admin required)
+
      * @param restaurantId restaurant ID
      * @return restaurant location response
      */
@@ -72,7 +69,6 @@ public class RestaurantController {
     /**
      * Creates a new restaurant (admin only).
      *
-     * @param role       caller role (must be admin)
      * @param restaurant create request with name, times, location
      * @return saved restaurant entity
      */
@@ -95,7 +91,6 @@ public class RestaurantController {
     /**
      * Adds a menu item to a restaurant (admin only).
      *
-     * @param role         caller role (must be admin)
      * @param restaurantId restaurant ID
      * @param item         menu item (name, price, stock, isVeg, category)
      * @return saved menu item

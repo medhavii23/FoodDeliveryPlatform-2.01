@@ -1,36 +1,5 @@
-server:
-  port: 8089
-
 spring:
   application:
     name: RESTAURANT-SERVICE
-
-
-  datasource:
-    url: jdbc:h2:tcp://localhost:9092/./data/foodplatform;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    driverClassName: org.h2.Driver
-    username: sa
-    password:
-  jpa:
-    defer-datasource-initialization: true
-    hibernate:
-      ddl-auto: validate
-    show-sql: true
-    properties:
-      hibernate:
-        default_schema: restaurant
-
-  sql:
-    init:
-      mode: never
-
-
-  h2:
-    console:
-      enabled: true
-
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
-
+  config:
+    import: optional:configserver:http://localhost:8888

@@ -17,6 +17,7 @@
         <option value="$PROJECT_DIR$/api-gateway/pom.xml" />
         <option value="$PROJECT_DIR$/identity-service/pom.xml" />
         <option value="$PROJECT_DIR$/h2-server/pom.xml" />
+        <option value="$PROJECT_DIR$/config_server/pom.xml" />
       </list>
     </option>
   </component>
