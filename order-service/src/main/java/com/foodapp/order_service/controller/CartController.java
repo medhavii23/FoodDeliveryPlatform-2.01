@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
@@ -91,14 +90,12 @@ public class CartController {
     /**
      * Returns the customer's active cart, optionally filtered by restaurant.
      *
-     * @param authUser       optional user name from auth
      * @param authId         customer UUID (required)
      * @param restaurantName optional filter by restaurant name
      * @return cart view or null if no active cart
      */
     @GetMapping("/my")
     public CartViewResponse myCart(
-            @RequestHeader(value = Constants.AUTH_USER, required = false) String authUser,
             @RequestHeader(value = Constants.AUTH_ID, required = false) UUID authId,
             @RequestParam(value = "restaurantName", required = false) String restaurantName) {
 
@@ -242,7 +239,6 @@ public class CartController {
     /**
      * Updates order status (admin only).
      *
-     * @param role    caller role (must be admin)
      * @param orderId order UUID
      * @param status  new status
      * @return updated order
